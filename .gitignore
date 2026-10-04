@@ -1,0 +1,30 @@
+# Secrets and local environment
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+
+# Frontend dependencies and generated files
+node_modules/
+frontend/dist/
+frontend/coverage/
+frontend/.vite/
+frontend/test-results/
+frontend/playwright-report/
+
+# Backend generated files
+backend/bin/
+backend/coverage.out
+*.test
+*.exe
+
+# Local machine/editor files
+.DS_Store
+Thumbs.db
+*.log
+
+# Runtime evidence/dumps: keep only the directory guide
+/artifacts/*
+!/artifacts/README.md
