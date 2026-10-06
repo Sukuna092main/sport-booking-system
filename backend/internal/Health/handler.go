@@ -3,6 +3,7 @@ package health
 import (
 	"net/http"
 
+	"github.com/Sukuna092main/sport-booking-system/backend/internal/platform/response"
 	"github.com/gin-gonic/gin"
 )
 
@@ -17,7 +18,7 @@ func NewHandler(service *Service) *Handler {
 func (h *Handler) Ping(c *gin.Context) {
 	result, err := h.service.Ping(c.Request.Context())
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"error": gin.H{"code": "service_unavailable", "message": "service is unavailable"}})
+		response.Error(c, http.StatusServiceUnavailable, "service_unavailable", "Dịch vụ tạm thời không sẵn sàng.")
 		return
 	}
 	c.JSON(http.StatusOK, result)
