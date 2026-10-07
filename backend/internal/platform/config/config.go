@@ -20,6 +20,13 @@ type Config struct {
 	HTTPIdleTimeout       time.Duration
 	HTTPShutdownTimeout   time.Duration
 	LogLevel              string
+
+	// PostgreSQL (Neon)
+	DatabaseURL       string
+	DBMaxOpenConns    int
+	DBMaxIdleConns    int
+	DBConnMaxLifetime time.Duration
+	DBConnMaxIdleTime time.Duration
 }
 
 func Load() (Config, error) {
@@ -29,6 +36,10 @@ func Load() (Config, error) {
 		AppTimezone: stringValue("APP_TIMEZONE", ""),
 		HTTPAddr:    stringValue("HTTP_ADDR", ":8080"),
 		LogLevel:    strings.ToLower(stringValue("LOG_LEVEL", "info")),
+
+		DatabaseURL:    stringValue("DATABASE_URL", ""),
+		DBMaxOpenConns: intValue("DB_MAX_OPEN_CONNS", 20),
+		DBMaxIdleConns: intValue("DB_MAX_IDLE_CONNS", 5),
 	}
 
 	var err error
@@ -47,6 +58,13 @@ func Load() (Config, error) {
 	if cfg.HTTPShutdownTimeout, err = durationValue("HTTP_SHUTDOWN_TIMEOUT", 10*time.Second); err != nil {
 		return Config{}, err
 	}
+	if cfg.DBConnMaxLifetime, err = durationValue("DB_CONN_MAX_LIFETIME", 15*time.Minute); err != nil {
+		return Config{}, err
+	}
+	if cfg.DBConnMaxIdleTime, err = durationValue("DB_CONN_MAX_IDLE_TIME", 5*time.Minute); err != nil {
+		return Config{}, err
+	}
+
 	if err := cfg.Validate(); err != nil {
 		return Config{}, err
 	}
@@ -90,6 +108,15 @@ func (c Config) Validate() error {
 			return fmt.Errorf("%s must be greater than zero", name)
 		}
 	}
+	if strings.TrimSpace(c.DatabaseURL) == "" {
+		return fmt.Errorf("DATABASE_URL must not be empty")
+	}
+	if c.DBMaxOpenConns < 1 {
+		return fmt.Errorf("DB_MAX_OPEN_CONNS must be at least 1")
+	}
+	if c.DBMaxIdleConns < 1 {
+		return fmt.Errorf("DB_MAX_IDLE_CONNS must be at least 1")
+	}
 	return nil
 }
 
@@ -99,6 +126,18 @@ func stringValue(name, fallback string) string {
 		return fallback
 	}
 	return strings.TrimSpace(value)
+}
+
+func intValue(name string, fallback int) int {
+	value, ok := os.LookupEnv(name)
+	if !ok || strings.TrimSpace(value) == "" {
+		return fallback
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(value))
+	if err != nil || n < 0 {
+		return fallback
+	}
+	return n
 }
 
 func durationValue(name string, fallback time.Duration) (time.Duration, error) {

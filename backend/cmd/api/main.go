@@ -11,6 +11,7 @@ import (
 
 	"github.com/Sukuna092main/sport-booking-system/backend/internal/bootstrap"
 	"github.com/Sukuna092main/sport-booking-system/backend/internal/platform/config"
+	"github.com/Sukuna092main/sport-booking-system/backend/internal/platform/database"
 	"github.com/Sukuna092main/sport-booking-system/backend/internal/platform/logger"
 )
 
@@ -31,6 +32,22 @@ func run() error {
 	if err != nil {
 		return err
 	}
+
+	// Khởi tạo kết nối GORM → PostgreSQL (Neon), kiểm tra TLS ngay tại đây
+	db, err := database.New(cfg, log)
+	if err != nil {
+		return fmt.Errorf("database init: %w", err)
+	}
+	// Đóng connection pool khi server tắt
+	sqlDB, err := db.DB()
+	if err != nil {
+		return fmt.Errorf("lấy sql.DB để defer close: %w", err)
+	}
+	defer func() {
+		if closeErr := sqlDB.Close(); closeErr != nil {
+			log.Error("đóng database thất bại", "error", closeErr)
+		}
+	}()
 
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
