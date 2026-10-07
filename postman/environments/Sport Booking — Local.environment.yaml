@@ -1,0 +1,13 @@
+name: Sport Booking — Local
+values:
+  - key: baseUrl
+    value: ''
+  - key: userEmail
+    value: ''
+  - key: userPassword
+    value: ''
+  - key: userToken
+    value: ''
+  - key: adminToken
+    value: ''
+color: 240
