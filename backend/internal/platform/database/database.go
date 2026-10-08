@@ -3,8 +3,10 @@
 package database
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"time"
 
 	"gorm.io/driver/postgres"
@@ -18,18 +20,25 @@ import (
 // Hàm thực hiện Ping ngay khi khởi động; trả lỗi rõ ràng nếu kết nối thất bại.
 func New(cfg config.Config, log *slog.Logger) (*gorm.DB, error) {
 	// Chọn log level của GORM theo môi trường
-	gormLogLevel := logger.Warn
-	if cfg.Environment == "development" {
-		gormLogLevel = logger.Info
-	}
+	// SQL parameters can include password hashes and private profile fields.
+	gormLogLevel := logger.Silent
 
-	db, err := gorm.Open(postgres.Open(cfg.DatabaseURL), &gorm.Config{
+	dsn, err := url.Parse(cfg.DatabaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("invalid DATABASE_URL")
+	}
+	query := dsn.Query()
+	if query.Get("connect_timeout") == "" {
+		query.Set("connect_timeout", "10")
+	}
+	dsn.RawQuery = query.Encode()
+	db, err := gorm.Open(postgres.Open(dsn.String()), &gorm.Config{
 		Logger: logger.Default.LogMode(gormLogLevel),
 		// Tắt tự động tạo bảng — migration do Goose quản lý
-		DisableAutomaticPing: false,
+		DisableAutomaticPing: true,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("gorm open: %w", err)
+		return nil, fmt.Errorf("database connection failed; check DATABASE_URL and TLS")
 	}
 
 	// Lấy *sql.DB bên dưới để cấu hình connection pool
@@ -48,9 +57,11 @@ func New(cfg config.Config, log *slog.Logger) (*gorm.DB, error) {
 	sqlDB.SetConnMaxIdleTime(cfg.DBConnMaxIdleTime)
 
 	// Ping kiểm tra kết nối và TLS ngay khi khởi động
-	if err := sqlDB.Ping(); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := sqlDB.PingContext(ctx); err != nil {
 		_ = sqlDB.Close()
-		return nil, fmt.Errorf("ping database thất bại (kiểm tra DATABASE_URL và sslmode=require): %w", err)
+		return nil, fmt.Errorf("database ping failed; check DATABASE_URL, TLS and availability")
 	}
 
 	log.Info("kết nối database thành công",

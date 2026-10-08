@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"net"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -27,6 +28,8 @@ type Config struct {
 	DBMaxIdleConns    int
 	DBConnMaxLifetime time.Duration
 	DBConnMaxIdleTime time.Duration
+	JWTSecret         string
+	JWTTTL            time.Duration
 }
 
 func Load() (Config, error) {
@@ -37,12 +40,20 @@ func Load() (Config, error) {
 		HTTPAddr:    stringValue("HTTP_ADDR", ":8080"),
 		LogLevel:    strings.ToLower(stringValue("LOG_LEVEL", "info")),
 
-		DatabaseURL:    stringValue("DATABASE_URL", ""),
-		DBMaxOpenConns: intValue("DB_MAX_OPEN_CONNS", 20),
-		DBMaxIdleConns: intValue("DB_MAX_IDLE_CONNS", 5),
+		DatabaseURL: stringValue("DATABASE_URL", ""),
+		JWTSecret:   os.Getenv("JWT_SECRET"),
 	}
 
 	var err error
+	if cfg.DBMaxOpenConns, err = intValue("DB_MAX_OPEN_CONNS", 20); err != nil {
+		return Config{}, err
+	}
+	if cfg.DBMaxIdleConns, err = intValue("DB_MAX_IDLE_CONNS", 5); err != nil {
+		return Config{}, err
+	}
+	if cfg.JWTTTL, err = durationValue("JWT_TTL", 15*time.Minute); err != nil {
+		return Config{}, err
+	}
 	if cfg.HTTPReadHeaderTimeout, err = durationValue("HTTP_READ_HEADER_TIMEOUT", 5*time.Second); err != nil {
 		return Config{}, err
 	}
@@ -72,6 +83,12 @@ func Load() (Config, error) {
 }
 
 func (c Config) Validate() error {
+	if len(c.JWTSecret) < 32 || strings.TrimSpace(c.JWTSecret) == "" {
+		return fmt.Errorf("JWT_SECRET must contain at least 32 bytes")
+	}
+	if c.JWTTTL < time.Minute || c.JWTTTL > 24*time.Hour {
+		return fmt.Errorf("JWT_TTL must be between 1m and 24h")
+	}
 	if strings.TrimSpace(c.AppName) == "" {
 		return fmt.Errorf("APP_NAME must not be empty")
 	}
@@ -111,11 +128,24 @@ func (c Config) Validate() error {
 	if strings.TrimSpace(c.DatabaseURL) == "" {
 		return fmt.Errorf("DATABASE_URL must not be empty")
 	}
+	url, err := url.Parse(c.DatabaseURL)
+	if err != nil || (url.Scheme != "postgres" && url.Scheme != "postgresql") || url.Hostname() == "" || url.User == nil || url.Path == "" || url.Path == "/" {
+		return fmt.Errorf("DATABASE_URL must be a valid PostgreSQL URL")
+	}
+	sslmode := url.Query().Get("sslmode")
+	if c.Environment == "production" || strings.HasSuffix(url.Hostname(), ".neon.tech") {
+		if sslmode != "require" && sslmode != "verify-ca" && sslmode != "verify-full" {
+			return fmt.Errorf("DATABASE_URL must require TLS for production/Neon")
+		}
+	}
 	if c.DBMaxOpenConns < 1 {
 		return fmt.Errorf("DB_MAX_OPEN_CONNS must be at least 1")
 	}
-	if c.DBMaxIdleConns < 1 {
-		return fmt.Errorf("DB_MAX_IDLE_CONNS must be at least 1")
+	if c.DBMaxIdleConns < 0 || c.DBMaxIdleConns > c.DBMaxOpenConns {
+		return fmt.Errorf("DB_MAX_IDLE_CONNS must be between 0 and DB_MAX_OPEN_CONNS")
+	}
+	if c.DBConnMaxLifetime <= 0 || c.DBConnMaxIdleTime <= 0 {
+		return fmt.Errorf("database connection lifetimes must be positive")
 	}
 	return nil
 }
@@ -128,16 +158,16 @@ func stringValue(name, fallback string) string {
 	return strings.TrimSpace(value)
 }
 
-func intValue(name string, fallback int) int {
+func intValue(name string, fallback int) (int, error) {
 	value, ok := os.LookupEnv(name)
 	if !ok || strings.TrimSpace(value) == "" {
-		return fallback
+		return fallback, nil
 	}
 	n, err := strconv.Atoi(strings.TrimSpace(value))
 	if err != nil || n < 0 {
-		return fallback
+		return 0, fmt.Errorf("%s must be a nonnegative integer", name)
 	}
-	return n
+	return n, nil
 }
 
 func durationValue(name string, fallback time.Duration) (time.Duration, error) {
