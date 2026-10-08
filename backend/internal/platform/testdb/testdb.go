@@ -88,3 +88,17 @@ func Open(t *testing.T) *sql.DB {
 	}
 	return db
 }
+
+func SeedCourts(t *testing.T, db *sql.DB) {
+	t.Helper()
+	_, source, _, _ := runtime.Caller(0)
+	contents, err := os.ReadFile(filepath.Join(filepath.Dir(source), "../../..", "testdata", "court_foundation.sql"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if _, err = db.ExecContext(ctx, string(contents)); err != nil {
+		t.Fatal("court fixtures:", err)
+	}
+}
