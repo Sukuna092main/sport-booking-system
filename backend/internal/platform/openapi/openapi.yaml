@@ -137,7 +137,7 @@ paths:
       tags: [Sport types]
       summary: Danh sách loại thể thao đang hoạt động
       operationId: listSportTypes
-      x-implementation-status: planned
+      x-implementation-status: implemented
       responses:
         '200':
           description: Danh sách loại thể thao.
@@ -150,12 +150,14 @@ paths:
                   data:
                     type: array
                     items: { $ref: '#/components/schemas/SportType' }
+        '500':
+          $ref: '#/components/responses/InternalError'
   /courts:
     get:
       tags: [Courts]
       summary: Tìm sân đang hoạt động
       operationId: listCourts
-      x-implementation-status: planned
+      x-implementation-status: implemented
       parameters:
         - { $ref: '#/components/parameters/Search' }
         - { $ref: '#/components/parameters/SportTypeFilter' }
@@ -170,12 +172,14 @@ paths:
                 $ref: '#/components/schemas/CourtListResponse'
         '400':
           $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /courts/{courtId}:
     get:
       tags: [Courts]
       summary: Chi tiết sân đang hoạt động
       operationId: getCourt
-      x-implementation-status: planned
+      x-implementation-status: implemented
       parameters:
         - { $ref: '#/components/parameters/CourtId' }
       responses:
@@ -185,8 +189,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CourtResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /courts/{courtId}/availability:
     get:
       tags: [Courts]
@@ -762,7 +770,7 @@ components:
     Page:
       name: page
       in: query
-      schema: { type: integer, minimum: 1, default: 1 }
+      schema: { type: integer, minimum: 1, maximum: 2147483647, default: 1 }
     PageSize:
       name: pageSize
       in: query
