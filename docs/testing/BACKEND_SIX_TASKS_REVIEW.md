@@ -84,7 +84,8 @@ Mỗi task có PR vào develop; chỉ merge khi Backend/Frontend CI đạt.
 | Data Foundation | [#9](https://github.com/Sukuna092main/sport-booking-system/pull/9) |
 | Basic Profile & Ownership | [#10](https://github.com/Sukuna092main/sport-booking-system/pull/10) |
 | Court Browse/Search/Detail | [#11](https://github.com/Sukuna092main/sport-booking-system/pull/11) |
+| Availability Read & Exclusion Rules | [#12](https://github.com/Sukuna092main/sport-booking-system/pull/12) |
 
-Kết quả CI/merge xem trực tiếp trong từng PR. Availability được thêm link sau khi mở PR.
+Kết quả CI/merge xem trực tiếp trong từng PR; các kiểm tra phải đạt trên đúng SHA được merge.
 
 Raw evidence nằm trong `artifacts/backend-six-tasks/` (gitignored); báo cáo này là bản tóm tắt để review.
