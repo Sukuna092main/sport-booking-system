@@ -18,6 +18,14 @@ Ngày thực hiện: 08/10/2026. Phạm vi theo các card Trello và ERD v1.0 đ
 - Route ADMIN dùng để test chỉ nằm trong test, không tạo endpoint debug trên server.
 - Recovery trả ErrorResponse với requestId; test xác nhận panic không làm lộ secret.
 
+## Court / Schedule / Blackout Data Foundation
+
+- Giữ 10 migration đã bàn giao; migration 00011 bổ sung ràng buộc theo ERD.
+- Sửa unique slot/ngày thành partial unique khi `released_at IS NULL`; bắt buộc request_hash; chặn lịch/slot active chồng nhau bằng GiST.
+- Fixture SQL riêng có sân active/inactive, sport inactive, giờ tuần, slot, blackout, booking confirmed/cancelled và template cũ đã inactive.
+- Availability dùng predicate khoảng thời gian `[start,end)` độc lập với eligibility và giới hạn người dùng.
+- Migration không tự chạy lúc khởi động. DB chung cần kiểm tra dữ liệu cũ trước khi áp dụng; không tự sửa hash lịch sử hoặc reset Neon.
+
 ## Môi trường kiểm thử
 
 `TEST_DATABASE_URL` chỉ chấp nhận host local/CI và tên DB kết thúc `_test`. Mỗi test dùng schema riêng và tự dọn schema; không đọc `DATABASE_URL` của Neon.
