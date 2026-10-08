@@ -1,9 +1,9 @@
 openapi: 3.0.3
 info:
   title: Sport Booking API
-  version: 0.2.0
+  version: 0.3.0
   description: |
-    Bản hợp đồng API đề xuất cho MVP. Chỉ GET /ping đã được triển khai.
+    Hợp đồng API MVP. Xem x-implementation-status của từng operation.
     Các operation có x-implementation-status: planned là hợp đồng để review,
     chưa phải endpoint đang chạy. Ngày và giờ địa phương dùng APP_TIMEZONE
     của địa điểm; mọi timestamp có múi giờ được trả theo UTC.
@@ -38,7 +38,7 @@ paths:
       tags: [Auth]
       summary: Đăng ký tài khoản USER
       operationId: register
-      x-implementation-status: planned
+      x-implementation-status: implemented
       requestBody:
         required: true
         content:
@@ -56,12 +56,14 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '409':
           $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /auth/login:
     post:
       tags: [Auth]
       summary: Đăng nhập
       operationId: login
-      x-implementation-status: planned
+      x-implementation-status: implemented
       requestBody:
         required: true
         content:
@@ -81,6 +83,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /users/me:
     get:
       tags: [Users]
@@ -762,6 +766,11 @@ components:
       description: Chuỗi opaque 1–128 ký tự, duy nhất theo người dùng; cùng khóa và nội dung trả booking ban đầu.
       schema: { type: string, minLength: 1, maxLength: 128 }
   responses:
+    InternalError:
+      description: Lỗi hệ thống; không trả thông tin SQL hoặc credential.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
     BadRequest:
       description: Dữ liệu hoặc tham số không hợp lệ (validation_error).
       content:
@@ -854,7 +863,7 @@ components:
       required: [email, password, fullName]
       properties:
         email: { type: string, format: email, maxLength: 254 }
-        password: { type: string, format: password, minLength: 8 }
+        password: { type: string, format: password, minLength: 8, maxLength: 72, description: "Tối đa 72 byte UTF-8; không tự trim mật khẩu." }
         fullName: { type: string, minLength: 1, maxLength: 120 }
         phone: { type: string, maxLength: 30 }
     LoginRequest:
