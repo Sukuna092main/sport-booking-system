@@ -145,6 +145,8 @@ docs/github-workflow
 
 # 3. Quy tắc đặt tên branch
 
+Backend dùng `be_<ten_task>` với dấu gạch dưới, theo quy định ở mục 2.2.
+
 Cấu trúc:
 
 ```text
@@ -181,7 +183,7 @@ final-final
 Tên branch:
 
 - viết thường;
-- dùng dấu `-` để ngăn cách từ;
+- Backend dùng dấu `_`; các nhánh theo mẫu `<type>/...` dùng dấu `-`;
 - không dùng dấu tiếng Việt;
 - mô tả đúng task đang làm;
 - không quá dài.

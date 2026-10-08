@@ -75,6 +75,16 @@ go build ./...
 Tài khoản dùng: `huyhcm2k5it`. Đã đăng xuất `phuhuyhcm` khỏi Git Credential Manager.
 Nhánh theo quy định Huy chốt: `be_auth_register_login`, `be_auth_role_middleware`,
 `be_court_data_foundation`, `be_user_profile`, `be_court_list_detail`, `be_court_availability`.
-Mỗi task có PR vào develop; chỉ merge khi Backend/Frontend CI đạt. Kết quả CI/merge được ghi khi hoàn tất.
+Mỗi task có PR vào develop; chỉ merge khi Backend/Frontend CI đạt.
+
+| Task | PR |
+| --- | --- |
+| Authentication Core | [#7](https://github.com/Sukuna092main/sport-booking-system/pull/7) |
+| Authorization Middleware | [#8](https://github.com/Sukuna092main/sport-booking-system/pull/8) |
+| Data Foundation | [#9](https://github.com/Sukuna092main/sport-booking-system/pull/9) |
+| Basic Profile & Ownership | [#10](https://github.com/Sukuna092main/sport-booking-system/pull/10) |
+| Court Browse/Search/Detail | [#11](https://github.com/Sukuna092main/sport-booking-system/pull/11) |
+
+Kết quả CI/merge xem trực tiếp trong từng PR. Availability được thêm link sau khi mở PR.
 
 Raw evidence nằm trong `artifacts/backend-six-tasks/` (gitignored); báo cáo này là bản tóm tắt để review.
