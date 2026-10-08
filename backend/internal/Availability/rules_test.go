@@ -19,6 +19,7 @@ func TestHalfOpenExclusionRules(t *testing.T) {
 		{"partial", base, []Interval{{base.Add(90 * time.Minute), base.Add(100 * time.Minute)}}, false},
 		{"adjacent before", base, []Interval{{base, slot.Start}}, true},
 		{"adjacent after", base, []Interval{{slot.End, slot.End.Add(time.Hour)}}, true},
+		{"empty blocker", base, []Interval{{base.Add(90 * time.Minute), base.Add(90 * time.Minute)}}, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := CanReadAsAvailable(slot, tc.now, tc.blocks); got != tc.want {

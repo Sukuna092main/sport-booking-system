@@ -24,7 +24,7 @@ func testServer(t *testing.T) (*gin.Engine, *sql.DB) {
 	t.Helper()
 	db := testdb.Open(t)
 	cfg := config.Config{AppName: "sport-test", Environment: "test", AppTimezone: "Asia/Ho_Chi_Minh", JWTSecret: strings.Repeat("s", 32), JWTTTL: 15 * time.Minute}
-	return NewRouter(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)), db), db
+	return newRouter(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)), db, func() time.Time { return time.Date(2026, 10, 8, 0, 0, 0, 0, time.UTC) }), db
 }
 
 func registerLogin(t *testing.T, r *gin.Engine, email string) (string, string) {

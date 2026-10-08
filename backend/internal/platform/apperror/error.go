@@ -5,8 +5,9 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/Sukuna092main/sport-booking-system/backend/internal/platform/response"
 	"github.com/gin-gonic/gin"
+
+	"github.com/Sukuna092main/sport-booking-system/backend/internal/platform/response"
 )
 
 type Error struct {

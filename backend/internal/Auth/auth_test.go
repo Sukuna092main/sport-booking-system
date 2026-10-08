@@ -7,11 +7,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
+	"golang.org/x/crypto/bcrypt"
+
 	user "github.com/Sukuna092main/sport-booking-system/backend/internal/User"
 	"github.com/Sukuna092main/sport-booking-system/backend/internal/platform/apperror"
 	"github.com/Sukuna092main/sport-booking-system/backend/internal/platform/testdb"
-	"github.com/golang-jwt/jwt/v5"
-	"golang.org/x/crypto/bcrypt"
 )
 
 const testUserID = "11111111-1111-4111-8111-111111111111"
@@ -167,4 +168,28 @@ func TestAuthPostgreSQL(t *testing.T) {
 	}
 	_, err = s.Login(ctx, LoginRequest{Email: request.Email, Password: request.Password})
 	assertCode(t, err, "account_inactive")
+}
+
+func TestConcurrentDuplicateRegistration(t *testing.T) {
+	db := testdb.Open(t)
+	s := NewService(user.NewRepository(db), NewTokens(strings.Repeat("s", 32), "sport", time.Minute, time.Now))
+	done := make(chan error, 3)
+	for _, email := range []string{"race@example.test", "RACE@example.test", " race@example.test "} {
+		go func(email string) {
+			_, err := s.Register(context.Background(), RegisterRequest{Email: email, Password: "password123", FullName: "Race"})
+			done <- err
+		}(email)
+	}
+	created := 0
+	for i := 0; i < 3; i++ {
+		err := <-done
+		if err == nil {
+			created++
+		} else {
+			assertCode(t, err, "email_taken")
+		}
+	}
+	if created != 1 {
+		t.Fatalf("created %d accounts for one email", created)
+	}
 }

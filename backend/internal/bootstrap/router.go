@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	auth "github.com/Sukuna092main/sport-booking-system/backend/internal/Auth"
+	availability "github.com/Sukuna092main/sport-booking-system/backend/internal/Availability"
 	court "github.com/Sukuna092main/sport-booking-system/backend/internal/Court"
 	health "github.com/Sukuna092main/sport-booking-system/backend/internal/Health"
 	sporttype "github.com/Sukuna092main/sport-booking-system/backend/internal/SportType"
@@ -20,6 +21,10 @@ import (
 )
 
 func NewRouter(cfg config.Config, log *slog.Logger, db *sql.DB) *gin.Engine {
+	return newRouter(cfg, log, db, time.Now)
+}
+
+func newRouter(cfg config.Config, log *slog.Logger, db *sql.DB, now func() time.Time) *gin.Engine {
 	switch cfg.Environment {
 	case "production":
 		gin.SetMode(gin.ReleaseMode)
@@ -47,7 +52,7 @@ func NewRouter(cfg config.Config, log *slog.Logger, db *sql.DB) *gin.Engine {
 	v1 := router.Group("/api/v1")
 	v1.GET("/ping", healthHandler.Ping)
 	users := user.NewRepository(db)
-	tokens := auth.NewTokens(cfg.JWTSecret, cfg.AppName, cfg.JWTTTL, time.Now)
+	tokens := auth.NewTokens(cfg.JWTSecret, cfg.AppName, cfg.JWTTTL, now)
 	authHandler := auth.NewHandler(auth.NewService(users, tokens))
 	v1.POST("/auth/register", authHandler.Register)
 	v1.POST("/auth/login", authHandler.Login)
@@ -60,6 +65,12 @@ func NewRouter(cfg config.Config, log *slog.Logger, db *sql.DB) *gin.Engine {
 	v1.GET("/courts/:courtId", courts.Detail)
 	sports := sporttype.NewHandler(sporttype.NewService(sporttype.NewRepository(db)))
 	v1.GET("/sport-types", sports.List)
+	location, err := time.LoadLocation(cfg.AppTimezone)
+	if err != nil {
+		panic("APP_TIMEZONE must be validated before router initialization")
+	}
+	availabilityHandler := availability.NewHandler(availability.NewService(availability.NewRepository(db), location, now))
+	v1.GET("/courts/:courtId/availability", availabilityHandler.Read)
 	openapi.Register(v1)
 
 	return router

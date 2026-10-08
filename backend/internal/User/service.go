@@ -4,10 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/Sukuna092main/sport-booking-system/backend/internal/platform/apperror"
 	"net/http"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/Sukuna092main/sport-booking-system/backend/internal/platform/apperror"
 )
 
 type ProfilePatch struct {

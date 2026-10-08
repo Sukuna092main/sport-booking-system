@@ -1,8 +1,9 @@
 package court
 
 import (
-	"github.com/Sukuna092main/sport-booking-system/backend/internal/platform/testdb"
 	"testing"
+
+	"github.com/Sukuna092main/sport-booking-system/backend/internal/platform/testdb"
 )
 
 func TestFoundationConstraints(t *testing.T) {

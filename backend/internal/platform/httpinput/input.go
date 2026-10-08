@@ -8,8 +8,9 @@ import (
 	"net/http"
 	"regexp"
 
-	"github.com/Sukuna092main/sport-booking-system/backend/internal/platform/apperror"
 	"github.com/gin-gonic/gin"
+
+	"github.com/Sukuna092main/sport-booking-system/backend/internal/platform/apperror"
 )
 
 var uuidPattern = regexp.MustCompile(`(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)

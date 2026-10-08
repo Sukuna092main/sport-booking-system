@@ -5,11 +5,12 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/gin-gonic/gin"
+
 	user "github.com/Sukuna092main/sport-booking-system/backend/internal/User"
 	"github.com/Sukuna092main/sport-booking-system/backend/internal/platform/apperror"
 	"github.com/Sukuna092main/sport-booking-system/backend/internal/platform/identity"
 	"github.com/Sukuna092main/sport-booking-system/backend/internal/platform/response"
-	"github.com/gin-gonic/gin"
 )
 
 func Authenticate(users user.Repository, tokens *Tokens) gin.HandlerFunc {

@@ -40,6 +40,15 @@ Ngày thực hiện: 08/10/2026. Phạm vi theo các card Trello và ERD v1.0 đ
 - Lọc sportTypeId, phân trang 1/20, pageSize tối đa 100; count và danh sách dùng cùng snapshot, thứ tự code/id ổn định.
 - Test HTTP/PostgreSQL đã có search/filter/pagination/empty, UUID sai, inactive, giá decimal string và input injection.
 
+## Availability Read API & Exclusion Rules
+
+- GET `/courts/{courtId}/availability?date=YYYY-MM-DD` đọc snapshot nhất quán, theo APP_TIMEZONE, timestamp UTC.
+- Ngày từ hôm nay đến +30 ngày lịch; loại sân inactive, template inactive/sai thứ/sai thời lượng/ngoài giờ, giờ DST mơ hồ hoặc không tồn tại.
+- Slot quá khứ, blackout active và booking confirmed chưa released có overlap được đánh dấu false; dùng snapshot giờ thực tế dù template cũ đã inactive.
+- Booking cancelled/released không chặn, khoảng sát nhau được phép, slots sắp theo thời gian; ngày đóng cửa trả [].
+- Test unit/HTTP/PostgreSQL gồm horizon theo ngày địa phương, DST/giờ bị nhảy, partial blackout, template cũ, cancelled và released.
+- Kết quả chỉ là trạng thái lúc đọc; task Booking Create phải kiểm tra lại trong transaction.
+
 ## Môi trường kiểm thử
 
 `TEST_DATABASE_URL` chỉ chấp nhận host local/CI và tên DB kết thúc `_test`. Mỗi test dùng schema riêng và tự dọn schema; không đọc `DATABASE_URL` của Neon.
@@ -47,9 +56,25 @@ Ngày thực hiện: 08/10/2026. Phạm vi theo các card Trello và ERD v1.0 đ
 Lệnh chạy từ `backend/`:
 
 ```text
-go test -count=1 ./...
+go test -race -count=1 ./...
 go vet ./...
 go build ./...
 ```
 
-Các task còn lại đang được triển khai; chưa ghi nhận hoàn thành hoặc QA staging.
+## Kết quả review tích hợp
+
+- 52 test/case đã đạt với race detector, không có test integration bị skip.
+- 20 kiểm tra HTTP qua server thật đã đạt: Auth/Profile/Court/Availability, validation, error envelope và Swagger.
+- `go vet ./...`, build Windows và build Linux CGO_ENABLED=0 đã đạt.
+- Goose thực tế: Up 11 migration → Down về 0 → Up 11 migration, đều đạt trên DB kiểm thử riêng.
+- Bổ sung test đăng ký trùng email đồng thời, PATCH hai trường đồng thời, precision numeric và đối chiếu toàn bộ route implemented với Swagger.
+- Đã tự review theo quyền Huy giao. Chưa xác nhận QA Neon/staging; không thay dữ liệu DB chung.
+
+## GitHub và tên nhánh
+
+Tài khoản dùng: `huyhcm2k5it`. Đã đăng xuất `phuhuyhcm` khỏi Git Credential Manager.
+Nhánh theo quy định Huy chốt: `be_auth_register_login`, `be_auth_role_middleware`,
+`be_court_data_foundation`, `be_user_profile`, `be_court_list_detail`, `be_court_availability`.
+Mỗi task có PR vào develop; chỉ merge khi Backend/Frontend CI đạt. Kết quả CI/merge được ghi khi hoàn tất.
+
+Raw evidence nằm trong `artifacts/backend-six-tasks/` (gitignored); báo cáo này là bản tóm tắt để review.

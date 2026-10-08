@@ -1,4 +1,4 @@
-package court
+package availability
 
 import (
 	"net/http"
@@ -13,24 +13,16 @@ import (
 type Handler struct{ service *Service }
 
 func NewHandler(service *Service) *Handler { return &Handler{service: service} }
-func (h *Handler) List(c *gin.Context) {
+func (h *Handler) Read(c *gin.Context) {
 	query, err := url.ParseQuery(c.Request.URL.RawQuery)
-	if err != nil {
-		apperror.Write(c, apperror.Invalid("query", "Query không hợp lệ."))
+	if err != nil || len(query["date"]) != 1 {
+		apperror.Write(c, apperror.Invalid("date", "Phải gửi đúng một ngày YYYY-MM-DD."))
 		return
 	}
-	result, err := h.service.List(c.Request.Context(), query)
-	if err != nil {
-		apperror.Write(c, err)
-		return
-	}
-	c.JSON(http.StatusOK, result)
-}
-func (h *Handler) Detail(c *gin.Context) {
-	value, err := h.service.Detail(c.Request.Context(), c.Param("courtId"))
+	result, err := h.service.Read(c.Request.Context(), c.Param("courtId"), query.Get("date"))
 	if err != nil {
 		apperror.Write(c, err)
 		return
 	}
-	response.Data(c, http.StatusOK, value)
+	response.Data(c, http.StatusOK, result)
 }

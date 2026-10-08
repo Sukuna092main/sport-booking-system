@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Sukuna092main/sport-booking-system/backend/internal/platform/httpinput"
 	"github.com/golang-jwt/jwt/v5"
+
+	"github.com/Sukuna092main/sport-booking-system/backend/internal/platform/httpinput"
 )
 
 type Claims struct {

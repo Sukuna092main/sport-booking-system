@@ -8,7 +8,9 @@ type Interval struct {
 	End   time.Time
 }
 
-func Overlaps(a, b Interval) bool { return a.Start.Before(b.End) && b.Start.Before(a.End) }
+func Overlaps(a, b Interval) bool {
+	return a.End.After(a.Start) && b.End.After(b.Start) && a.Start.Before(b.End) && b.Start.Before(a.End)
+}
 
 // CanReadAsAvailable is independent of user limits and booking selection rules.
 // The caller first validates court, weekday, hours and slot duration.

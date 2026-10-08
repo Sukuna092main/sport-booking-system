@@ -52,4 +52,11 @@ func TestCourtBrowseHTTP(t *testing.T) {
 	if status != 400 {
 		t.Fatal(status)
 	}
+	if _, err := db.Exec("UPDATE courts SET reference_price_amount=123.456789 WHERE id=$1", fixtureCourt); err != nil {
+		t.Fatal(err)
+	}
+	status, result = request(t, r, "GET", "/api/v1/courts/"+fixtureCourt, "", "")
+	if status != 200 || result["data"].(map[string]any)["referencePriceAmount"] != "123.456789" {
+		t.Fatal("numeric precision changed", result)
+	}
 }

@@ -1,10 +1,11 @@
 package httpinput
 
 import (
-	"github.com/gin-gonic/gin"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/gin-gonic/gin"
 )
 
 func TestJSON(t *testing.T) {

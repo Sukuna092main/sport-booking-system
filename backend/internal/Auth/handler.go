@@ -1,11 +1,13 @@
 package auth
 
 import (
+	"net/http"
+
+	"github.com/gin-gonic/gin"
+
 	"github.com/Sukuna092main/sport-booking-system/backend/internal/platform/apperror"
 	"github.com/Sukuna092main/sport-booking-system/backend/internal/platform/httpinput"
 	"github.com/Sukuna092main/sport-booking-system/backend/internal/platform/response"
-	"github.com/gin-gonic/gin"
-	"net/http"
 )
 
 type Handler struct{ service *Service }
