@@ -52,3 +52,12 @@ func (r *SQLRepository) ByEmail(ctx context.Context, email string) (User, error)
 func (r *SQLRepository) ByID(ctx context.Context, id string) (User, error) {
 	return scanUser(r.db.QueryRowContext(ctx, "SELECT "+columns+" FROM users WHERE id=$1", id))
 }
+
+func (r *SQLRepository) UpdateProfile(ctx context.Context, id string, p ProfilePatch) (User, error) {
+	// Atomic field-specific update: omitted fields keep their current DB value.
+	return scanUser(r.db.QueryRowContext(ctx, `UPDATE users SET
+	    full_name=CASE WHEN $2 THEN $3 ELSE full_name END,
+	    phone=CASE WHEN $4 THEN $5 ELSE phone END,
+	    updated_at=clock_timestamp()
+	    WHERE id=$1 AND status='ACTIVE' RETURNING `+columns, id, p.NameSet, p.Name, p.PhoneSet, p.Phone))
+}

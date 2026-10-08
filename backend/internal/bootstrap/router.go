@@ -49,6 +49,10 @@ func NewRouter(cfg config.Config, log *slog.Logger, db *sql.DB) *gin.Engine {
 	authHandler := auth.NewHandler(auth.NewService(users, tokens))
 	v1.POST("/auth/register", authHandler.Register)
 	v1.POST("/auth/login", authHandler.Login)
+	profile := user.NewHandler(user.NewService(users))
+	protected := v1.Group("/users", auth.Authenticate(users, tokens))
+	protected.GET("/me", profile.Get)
+	protected.PATCH("/me", profile.Update)
 	openapi.Register(v1)
 
 	return router

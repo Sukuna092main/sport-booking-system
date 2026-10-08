@@ -90,7 +90,7 @@ paths:
       tags: [Users]
       summary: Hồ sơ của tôi
       operationId: getMyProfile
-      x-implementation-status: planned
+      x-implementation-status: implemented
       security: [{ bearerAuth: [] }]
       responses:
         '200':
@@ -101,11 +101,15 @@ paths:
                 $ref: '#/components/schemas/UserResponse'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
     patch:
       tags: [Users]
       summary: Cập nhật hồ sơ của tôi
       operationId: updateMyProfile
-      x-implementation-status: planned
+      x-implementation-status: implemented
       security: [{ bearerAuth: [] }]
       requestBody:
         required: true
@@ -124,6 +128,10 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /sport-types:
     get:
       tags: [Sport types]
