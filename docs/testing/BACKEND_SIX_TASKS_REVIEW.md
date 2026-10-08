@@ -82,9 +82,12 @@ Mỗi task có PR vào develop; chỉ merge khi Backend/Frontend CI đạt.
 | Authentication Core | [#7](https://github.com/Sukuna092main/sport-booking-system/pull/7) |
 | Authorization Middleware | [#8](https://github.com/Sukuna092main/sport-booking-system/pull/8) |
 | Data Foundation | [#9](https://github.com/Sukuna092main/sport-booking-system/pull/9) |
-| Basic Profile & Ownership | [#10](https://github.com/Sukuna092main/sport-booking-system/pull/10) |
-| Court Browse/Search/Detail | [#11](https://github.com/Sukuna092main/sport-booking-system/pull/11) |
-| Availability Read & Exclusion Rules | [#12](https://github.com/Sukuna092main/sport-booking-system/pull/12) |
+| Basic Profile & Ownership | [#13](https://github.com/Sukuna092main/sport-booking-system/pull/13) |
+| Court Browse/Search/Detail | [#14](https://github.com/Sukuna092main/sport-booking-system/pull/14) |
+| Availability Read & Exclusion Rules | [#15](https://github.com/Sukuna092main/sport-booking-system/pull/15) |
+
+PR #7–#9 đã merge trước khi đổi tên nhánh. PR #10–#12 được GitHub đóng khi đổi
+nhánh nguồn sang `feature/be_...`; PR #13–#15 thay thế và vẫn gộp về `develop`.
 
 Kết quả CI/merge xem trực tiếp trong từng PR; các kiểm tra phải đạt trên đúng SHA được merge.
 
