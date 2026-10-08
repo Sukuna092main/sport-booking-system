@@ -26,6 +26,13 @@ Ngày thực hiện: 08/10/2026. Phạm vi theo các card Trello và ERD v1.0 đ
 - Availability dùng predicate khoảng thời gian `[start,end)` độc lập với eligibility và giới hạn người dùng.
 - Migration không tự chạy lúc khởi động. DB chung cần kiểm tra dữ liệu cũ trước khi áp dụng; không tự sửa hash lịch sử hoặc reset Neon.
 
+## Basic Profile & Ownership API
+
+- GET/PATCH `/users/me` lấy ID từ context đã xác thực.
+- PATCH chỉ cho phép fullName/phone; bỏ qua trường không gửi, phone:null xóa số điện thoại, cập nhật updatedAt.
+- Test HTTP với hai tài khoản kiểm tra đọc/sửa chính mình, chặn id/userId/email/role/status/password, validation và persistence.
+- Kiểm tra tài khoản inactive và tài khoản đã xóa ngay khi JWT còn hạn.
+
 ## Môi trường kiểm thử
 
 `TEST_DATABASE_URL` chỉ chấp nhận host local/CI và tên DB kết thúc `_test`. Mỗi test dùng schema riêng và tự dọn schema; không đọc `DATABASE_URL` của Neon.
