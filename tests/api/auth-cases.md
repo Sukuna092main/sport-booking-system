@@ -1,8 +1,8 @@
 # Auth API Test Cases
 
-- Trạng thái: Draft — chưa chạy
+- Trạng thái: Các scenario Auth/Profile có test Go tự động; xem báo cáo review 6 task. Bộ request Postman chưa chạy riêng.
 - Nguồn: `backend/internal/platform/openapi/openapi.yaml`
-- Lưu ý: Register/Login trong backend hiện mới là contract, chưa triển khai.
+- Register/Login/Profile đã triển khai. Guard USER/ADMIN được kiểm chứng trong test middleware; `/admin/courts` còn planned nên chưa dùng các request Admin trong bảng làm smoke endpoint thật.
 
 | ID | Scenario | Request / dữ liệu | Expected | Actual | Kết quả |
 |---|---|---|---|---|---|

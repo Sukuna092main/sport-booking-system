@@ -6,10 +6,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
+
 	user "github.com/Sukuna092main/sport-booking-system/backend/internal/User"
 	"github.com/Sukuna092main/sport-booking-system/backend/internal/platform/identity"
 	"github.com/Sukuna092main/sport-booking-system/backend/internal/platform/middleware"
-	"github.com/gin-gonic/gin"
 )
 
 func TestAuthorization(t *testing.T) {

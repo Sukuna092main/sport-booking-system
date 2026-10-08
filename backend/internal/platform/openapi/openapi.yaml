@@ -200,8 +200,12 @@ paths:
       tags: [Courts]
       summary: Slot khả dụng theo ngày địa phương
       operationId: getCourtAvailability
-      x-implementation-status: planned
-      description: Slot quá khứ, bị chặn hoặc đã có booking CONFIRMED được đánh dấu không khả dụng.
+      x-implementation-status: implemented
+      description: |
+        Chỉ trả template active, đúng thứ, đúng thời lượng và nằm trong giờ mở cửa active.
+        Giờ không tồn tại hoặc mơ hồ do DST bị loại. Slot có startsAt <= hiện tại,
+        overlap blackout active hoặc snapshot booking CONFIRMED chưa released được đánh dấu false.
+        Khoảng [start,end) cho phép hai slot sát nhau. Booking cancelled/released không chặn.
       parameters:
         - { $ref: '#/components/parameters/CourtId' }
         - name: date
@@ -220,6 +224,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /bookings:
     post:
       tags: [Bookings]
@@ -881,14 +887,14 @@ components:
         email: { type: string, format: email, maxLength: 254 }
         password: { type: string, format: password, minLength: 8, maxLength: 72, description: "Tối đa 72 byte UTF-8; không tự trim mật khẩu." }
         fullName: { type: string, minLength: 1, maxLength: 120 }
-        phone: { type: string, maxLength: 30 }
+        phone: { type: string, nullable: true, maxLength: 30 }
     LoginRequest:
       type: object
       additionalProperties: false
       required: [email, password]
       properties:
         email: { type: string, format: email }
-        password: { type: string, format: password }
+        password: { type: string, format: password, minLength: 1, maxLength: 72, description: Tối đa 72 byte UTF-8. }
     LoginResponse:
       type: object
       required: [data]
@@ -953,8 +959,8 @@ components:
         referencePriceAmount:
           type: string
           nullable: true
-          pattern: '^\d+(\.\d{1,2})?$'
-          description: Decimal string để tránh sai số số thực; chỉ để tham khảo, không thu tiền.
+          pattern: '^\d+(\.\d+)?$'
+          description: Decimal string giữ nguyên độ chính xác numeric của ERD; chỉ để tham khảo, không thu tiền.
         referencePriceCurrency: { type: string, nullable: true, minLength: 3, maxLength: 3, example: VND }
     CourtResponse:
       type: object

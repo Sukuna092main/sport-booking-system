@@ -9,9 +9,10 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"golang.org/x/crypto/bcrypt"
+
 	user "github.com/Sukuna092main/sport-booking-system/backend/internal/User"
 	"github.com/Sukuna092main/sport-booking-system/backend/internal/platform/apperror"
-	"golang.org/x/crypto/bcrypt"
 )
 
 type RegisterRequest struct {

@@ -1,12 +1,12 @@
 # REST Contract và Swagger Base
 
-**Phiên bản đề xuất:** 0.2.0 · **Trạng thái:** chờ Huy duyệt và Duy đối chiếu FE/API · **Nguồn chuẩn:** [OpenAPI 3.0.3](../../../backend/internal/platform/openapi/openapi.yaml).
+**Phiên bản:** 0.3.0 · **Nguồn chuẩn:** [OpenAPI 3.0.3](../../../backend/internal/platform/openapi/openapi.yaml). Huy đã giao tự chốt triển khai 6 task backend; FE đối chiếu contract trước tích hợp.
 
 ## Cách mở
 
 Chạy backend theo [hướng dẫn](../../../backend/README.md), rồi mở `http://localhost:8080/api/v1/docs`. File thô ở `http://localhost:8080/api/v1/openapi.yaml`. Trang Swagger dùng `swagger-ui-dist@5.11.0` từ unpkg; trình duyệt cần truy cập CDN để tải giao diện, còn file OpenAPI được server phục vụ cục bộ.
 
-**Chỉ `GET /api/v1/ping` đã chạy.** Swagger mô tả hợp đồng của các endpoint nghiệp vụ tương lai; gọi chúng lúc này trả `404`. Mỗi operation có `x-implementation-status` để phân biệt. Không coi màn hình Swagger là bằng chứng Auth/Booking/Admin đã được triển khai.
+**Đã triển khai:** Ping, Register/Login, Profile GET/PATCH, Sport Types, Court Browse/Search/Detail và Availability. Mỗi operation có `x-implementation-status`; Booking và Admin CRUD vẫn là `planned`. Xem [cách chạy và ví dụ](../../../backend/README.md), [kết quả kiểm thử/review](../../testing/BACKEND_SIX_TASKS_REVIEW.md).
 
 ## Quy ước chung
 
@@ -48,7 +48,7 @@ Các vi phạm như quá 30 ngày, slot quá khứ, vượt giới hạn ba book
 | FR-18: thống kê | `/admin/statistics` GET. |
 | FR-19: audit | Service ghi `audit_logs` khi thay đổi quản trị và booking; SRS chưa yêu cầu endpoint đọc audit. |
 
-Toàn bộ các mục trên là **hợp đồng dự kiến**. Mức bao phủ ở bảng là bao phủ thiết kế, chưa phải chức năng đã lập trình hoặc kiểm thử. Chỉ `/ping` chạy trong backend hiện tại.
+Bảng trên mô tả phạm vi thiết kế MVP. FR-01–FR-06 đã có API thuộc 6 task này; FR-07–FR-19 được triển khai theo các task Booking/Admin tiếp theo. Foundation đã có schema, fixture và exclusion rules; chưa có Admin CRUD.
 
 ## Nguồn và các điểm cần duyệt
 
@@ -57,4 +57,4 @@ Toàn bộ các mục trên là **hợp đồng dự kiến**. Mức bao phủ �
 - [Thẻ kiến trúc](https://trello.com/c/0VhI2oe1): Go/Gin, REST `/api/v1`, JWT+bcrypt, USER/ADMIN.
 - [Task API](https://trello.com/c/ol2X6l9v): contract và Swagger phải qua review trước tích hợp FE.
 
-**Cần Huy/Duy duyệt trước khi coi là baseline:** hình dạng DTO cho UI, bộ mã lỗi, chính sách JWT chỉ có access token và đăng nhập lại khi hết hạn, tên trạng thái tài khoản `ACTIVE`/`INACTIVE`, công thức thống kê theo trạng thái hiện tại, quy tắc DELETE xóa mềm và quyền ADMIN hủy booking trước slot đầu tiên. Nếu thay đổi một mục, tăng phiên bản spec và cập nhật FE/backend cùng thay đổi đó. Duy đối chiếu Register/Login/Profile và các màn Court/Booking trước tích hợp.
+Các API đã triển khai giữ DTO đã chốt: access token, ACTIVE/INACTIVE, profile self-only, date theo APP_TIMEZONE. Duy đối chiếu trước tích hợp FE. Các quy tắc Booking/Admin còn planned được review trong task tương ứng; khi đổi contract phải tăng version và đồng bộ FE/backend.

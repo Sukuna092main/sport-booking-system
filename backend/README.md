@@ -1,30 +1,79 @@
-# Backend — Modular Monolith
+# Backend — Go/Gin Modular Monolith
 
-Go 1.25+ và Gin 1.12 tạo nền tảng HTTP. Backend là Modular Monolith với luồng Handler → Service → Repository, các gói hạ tầng dùng chung và khởi tạo phụ thuộc thủ công.
+Luồng xử lý: Handler → Service → Repository. PostgreSQL do Goose quản lý; server không AutoMigrate hoặc tự seed.
 
-## Chạy cục bộ
+## API đã triển khai
 
-Đứng trong thư mục `backend/`, đặt biến môi trường theo `.env.example` rồi chạy:
+Base path `/api/v1`. Swagger: `/api/v1/docs`; spec: `/api/v1/openapi.yaml`.
+
+| Chức năng | Method và đường dẫn | Quyền |
+| --- | --- | --- |
+| Kiểm tra tiến trình | GET `/ping` | Public |
+| Đăng ký | POST `/auth/register` | Public |
+| Đăng nhập | POST `/auth/login` | Public |
+| Hồ sơ của tôi | GET `/users/me` | USER/ADMIN |
+| Sửa họ tên/số điện thoại | PATCH `/users/me` | USER/ADMIN |
+| Loại thể thao | GET `/sport-types` | Public |
+| Tìm/lọc/phân trang sân | GET `/courts` | Public |
+| Chi tiết sân | GET `/courts/{courtId}` | Public |
+| Slot theo ngày | GET `/courts/{courtId}/availability?date=YYYY-MM-DD` | Public |
+
+Booking và Admin CRUD là các task tiếp theo, còn `planned` trong Swagger. Guard ADMIN đã có và được test, chưa đăng ký route CRUD chưa triển khai.
+
+## Chạy backend
+
+Go 1.25+. Ứng dụng đọc biến môi trường, không tự nạp `.env`. Dùng [`.env.example`](.env.example) làm danh sách cấu hình.
 
 ```powershell
 $env:APP_ENV = "development"
-$env:APP_TIMEZONE = "UTC"
+$env:APP_TIMEZONE = "Asia/Ho_Chi_Minh"
 $env:HTTP_ADDR = ":8080"
+$env:DATABASE_URL = "<PostgreSQL URL của môi trường đã được cấp quyền>"
+# Tạo secret dev; môi trường chung dùng secret ổn định từ secret manager.
+$jwtBytes = New-Object byte[] 32
+[Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($jwtBytes)
+$env:JWT_SECRET = [Convert]::ToBase64String($jwtBytes)
+$env:JWT_TTL = "15m"
+cd backend
 go run ./cmd/api
 ```
 
-`GET http://localhost:8080/api/v1/ping` trả `message: pong`, tên dịch vụ và môi trường. Ứng dụng đọc biến môi trường trực tiếp, không tự nạp file `.env`. `APP_TIMEZONE` là bắt buộc; giá trị `UTC` ở ví dụ chỉ dành cho bước chạy thử này. Trước khi triển khai nghiệp vụ đặt sân, phải đặt múi giờ IANA thực tế của địa điểm theo ERD v1.0 đã chốt.
+JWT_SECRET tối thiểu 32 byte; TTL từ 1 phút đến 24 giờ. Không đổi secret mỗi lần khởi động môi trường chung: token cũ sẽ mất hiệu lực. Production/Neon bắt buộc TLS. Log không ghi body, Authorization, hash mật khẩu hoặc SQL parameters.
 
-Swagger ở `GET http://localhost:8080/api/v1/docs`; OpenAPI YAML ở `GET http://localhost:8080/api/v1/openapi.yaml`. Xem [trạng thái contract](../docs/design/api/README.md) trước khi dùng: các endpoint nghiệp vụ đang là thiết kế để review, chưa được triển khai. Giao diện Swagger tải tài nguyên từ CDN.
+### Docker cục bộ
 
-## Cấu trúc
+Tạo JWT_SECRET trong shell như trên, rồi từ root repo chạy `docker compose up --build`. Compose dùng DB cục bộ và volume riêng. Không đổi URL dịch vụ migrate sang Neon nếu chưa kiểm tra migration/dữ liệu với người quản lý DB.
 
-- `cmd/api/`: khởi động HTTP server và tắt server có kiểm soát.
-- `internal/bootstrap/`: nối phụ thuộc thủ công và đăng ký route `/api/v1`.
-- `internal/<Module>/`: ranh giới nghiệp vụ theo luồng Handler → Service → Repository.
-- `internal/platform/`: cấu hình, logging, middleware, response và hạ tầng dùng chung; không đặt quy tắc Booking tại đây.
-- `migrations/`: chỉ chứa Goose migrations đã được review; task khởi tạo này chưa tạo schema.
+### Migration 00011
 
-Module `Health` là ví dụ nhỏ cho luồng ba lớp của route Ping. Repository của nó đọc thông tin ứng dụng từ cấu hình, không truy vấn cơ sở dữ liệu. Repository nghiệp vụ và kết nối PostgreSQL/GORM thuộc các task riêng.
+Bổ sung constraint theo ERD v1.0 và sửa slot đã hủy có thể đặt lại. Trên DB đã có dữ liệu, kiểm tra trước: request_hash NULL, giờ/template active chồng nhau, mã currency sai. Migration từ chối dữ liệu lệch; không tự tạo hash lịch sử hoặc xóa booking. Goose Down 00011 có thể bị chặn nếu đã có lịch sử hủy rồi đặt lại cùng slot/ngày; cần review dữ liệu trước rollback.
 
-Booking và BookingSlot phải dùng chung giao dịch do Booking service điều phối; repository không tự commit riêng. Availability đọc dữ liệu sân, lịch, lịch chặn và lượt đặt mà không tạo phụ thuộc vòng. Admin dùng lại service nghiệp vụ, không sao chép quy tắc. Notification là phần tùy chọn của MVP.
+## Ví dụ gọi API
+
+```powershell
+$base = "http://localhost:8080/api/v1"
+$login = Invoke-RestMethod "$base/auth/login" -Method Post -ContentType "application/json" -Body '{"email":"huy@example.com","password":"your-password"}'
+$headers = @{ Authorization = "Bearer $($login.data.accessToken)" }
+Invoke-RestMethod "$base/users/me" -Headers $headers
+Invoke-RestMethod "$base/users/me" -Method Patch -Headers $headers -ContentType "application/json" -Body '{"fullName":"Huy","phone":null}'
+Invoke-RestMethod "$base/courts?q=badminton&page=1&pageSize=20"
+```
+
+Đăng ký với email/password/fullName, phone tùy chọn. Password ít nhất 8 ký tự, tối đa 72 byte UTF-8; không tự trim. Đăng ký trả user, đăng nhập mới trả token. PATCH chỉ nhận fullName/phone, phone:null xóa số điện thoại. Tài khoản inactive bị chặn ngay cả khi JWT còn hạn.
+
+Availability dùng ngày địa phương của sân, từ hôm nay đến +30 ngày lịch. Chỉ trả template hợp lệ trong giờ hoạt động; slot quá khứ, bị chặn hoặc có booking chưa giải phóng trả available:false. Giờ DST mơ hồ/không tồn tại bị loại. Kết quả là snapshot lúc đọc; Booking Create phải kiểm tra lại trong transaction.
+
+## Test và review
+
+```powershell
+# DB kiểm thử riêng, tên kết thúc _test; không dùng URL Neon.
+$env:TEST_DATABASE_URL = "postgresql://postgres:local-test-only@localhost:55432/sport_booking_test?sslmode=disable"
+cd backend
+go test -race -count=1 ./...
+go vet ./...
+go build ./...
+```
+
+Không có TEST_DATABASE_URL thì các test integration skip; unit vẫn chạy. CI có PostgreSQL riêng và chạy cả unit/integration/race. Test tạo schema riêng và tự dọn; [fixture](testdata/court_foundation.sql) chỉ dùng test, không chạy tự động lúc server khởi động.
+
+Xem [kết quả review 6 task](../docs/testing/BACKEND_SIX_TASKS_REVIEW.md).

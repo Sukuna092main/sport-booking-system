@@ -12,7 +12,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o /out/server ./cmd/api
 
 # ---- Stage runtime (image nhỏ, chỉ chứa binary) ----
 FROM alpine:3.21
-RUN apk add --no-cache tzdata
+RUN apk add --no-cache ca-certificates tzdata
 RUN adduser -D appuser
 USER appuser
 WORKDIR /app
