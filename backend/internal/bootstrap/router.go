@@ -9,7 +9,9 @@ import (
 	"github.com/gin-gonic/gin"
 
 	auth "github.com/Sukuna092main/sport-booking-system/backend/internal/Auth"
+	court "github.com/Sukuna092main/sport-booking-system/backend/internal/Court"
 	health "github.com/Sukuna092main/sport-booking-system/backend/internal/Health"
+	sporttype "github.com/Sukuna092main/sport-booking-system/backend/internal/SportType"
 	user "github.com/Sukuna092main/sport-booking-system/backend/internal/User"
 	"github.com/Sukuna092main/sport-booking-system/backend/internal/platform/config"
 	"github.com/Sukuna092main/sport-booking-system/backend/internal/platform/middleware"
@@ -53,6 +55,11 @@ func NewRouter(cfg config.Config, log *slog.Logger, db *sql.DB) *gin.Engine {
 	protected := v1.Group("/users", auth.Authenticate(users, tokens))
 	protected.GET("/me", profile.Get)
 	protected.PATCH("/me", profile.Update)
+	courts := court.NewHandler(court.NewService(court.NewRepository(db)))
+	v1.GET("/courts", courts.List)
+	v1.GET("/courts/:courtId", courts.Detail)
+	sports := sporttype.NewHandler(sporttype.NewService(sporttype.NewRepository(db)))
+	v1.GET("/sport-types", sports.List)
 	openapi.Register(v1)
 
 	return router

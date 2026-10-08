@@ -33,6 +33,13 @@ Ngày thực hiện: 08/10/2026. Phạm vi theo các card Trello và ERD v1.0 đ
 - Test HTTP với hai tài khoản kiểm tra đọc/sửa chính mình, chặn id/userId/email/role/status/password, validation và persistence.
 - Kiểm tra tài khoản inactive và tài khoản đã xóa ngay khi JWT còn hạn.
 
+## Court Browse / Search / Detail API
+
+- Public GET `/sport-types`, `/courts`, `/courts/{courtId}` chỉ trả sân/sport active.
+- Tìm tên/mã không phân biệt hoa thường; q tối đa 100 ký tự; ký tự %, dấu nháy được tìm như ký tự thường.
+- Lọc sportTypeId, phân trang 1/20, pageSize tối đa 100; count và danh sách dùng cùng snapshot, thứ tự code/id ổn định.
+- Test HTTP/PostgreSQL đã có search/filter/pagination/empty, UUID sai, inactive, giá decimal string và input injection.
+
 ## Môi trường kiểm thử
 
 `TEST_DATABASE_URL` chỉ chấp nhận host local/CI và tên DB kết thúc `_test`. Mỗi test dùng schema riêng và tự dọn schema; không đọc `DATABASE_URL` của Neon.
