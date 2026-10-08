@@ -1,0 +1,1148 @@
+openapi: 3.0.3
+info:
+  title: Sport Booking API
+  version: 0.3.0
+  description: |
+    Hợp đồng API MVP. Xem x-implementation-status của từng operation.
+    Các operation có x-implementation-status: planned là hợp đồng để review,
+    chưa phải endpoint đang chạy. Ngày và giờ địa phương dùng APP_TIMEZONE
+    của địa điểm; mọi timestamp có múi giờ được trả theo UTC.
+servers:
+  - url: /api/v1
+tags:
+  - name: System
+  - name: Auth
+  - name: Users
+  - name: Sport types
+  - name: Courts
+  - name: Bookings
+  - name: Admin
+paths:
+  /ping:
+    get:
+      tags: [System]
+      summary: Kiểm tra tiến trình API
+      operationId: ping
+      x-implementation-status: implemented
+      responses:
+        '200':
+          description: Tiến trình hoạt động. Route vận hành này không dùng data envelope.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ping'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Đăng ký tài khoản USER
+      operationId: register
+      x-implementation-status: implemented
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Đã tạo tài khoản; không tự đăng nhập.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Đăng nhập
+      operationId: login
+      x-implementation-status: implemented
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Cấp JWT access token; hết hạn thì đăng nhập lại.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /users/me:
+    get:
+      tags: [Users]
+      summary: Hồ sơ của tôi
+      operationId: getMyProfile
+      x-implementation-status: planned
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Hồ sơ hiện tại.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    patch:
+      tags: [Users]
+      summary: Cập nhật hồ sơ của tôi
+      operationId: updateMyProfile
+      x-implementation-status: planned
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProfileRequest'
+      responses:
+        '200':
+          description: Hồ sơ đã cập nhật.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /sport-types:
+    get:
+      tags: [Sport types]
+      summary: Danh sách loại thể thao đang hoạt động
+      operationId: listSportTypes
+      x-implementation-status: planned
+      responses:
+        '200':
+          description: Danh sách loại thể thao.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/SportType' }
+  /courts:
+    get:
+      tags: [Courts]
+      summary: Tìm sân đang hoạt động
+      operationId: listCourts
+      x-implementation-status: planned
+      parameters:
+        - { $ref: '#/components/parameters/Search' }
+        - { $ref: '#/components/parameters/SportTypeFilter' }
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/PageSize' }
+      responses:
+        '200':
+          description: Danh sách sân và phân trang.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CourtListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /courts/{courtId}:
+    get:
+      tags: [Courts]
+      summary: Chi tiết sân đang hoạt động
+      operationId: getCourt
+      x-implementation-status: planned
+      parameters:
+        - { $ref: '#/components/parameters/CourtId' }
+      responses:
+        '200':
+          description: Thông tin sân.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CourtResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /courts/{courtId}/availability:
+    get:
+      tags: [Courts]
+      summary: Slot khả dụng theo ngày địa phương
+      operationId: getCourtAvailability
+      x-implementation-status: planned
+      description: Slot quá khứ, bị chặn hoặc đã có booking CONFIRMED được đánh dấu không khả dụng.
+      parameters:
+        - { $ref: '#/components/parameters/CourtId' }
+        - name: date
+          in: query
+          required: true
+          description: Ngày địa phương của sân, tối đa 30 ngày lịch kể từ hiện tại.
+          schema: { type: string, format: date }
+      responses:
+        '200':
+          description: Danh sách slot và trạng thái tại thời điểm đọc; tạo booking vẫn phải kiểm tra lại.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AvailabilityResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /bookings:
+    post:
+      tags: [Bookings]
+      summary: Tạo một booking cho một sân, một ngày và các slot liên tiếp
+      operationId: createBooking
+      x-implementation-status: planned
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateBookingRequest'
+      responses:
+        '201':
+          description: Booking mới được xác nhận.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookingResponse'
+        '200':
+          description: Gửi lại cùng người dùng, khóa và nội dung; trả booking gốc, kể cả nếu đã hủy.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookingResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+    get:
+      tags: [Bookings]
+      summary: Booking của tôi
+      operationId: listMyBookings
+      x-implementation-status: planned
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/PageSize' }
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/BookingStatus' }
+      responses:
+        '200':
+          description: Lịch sử của chính người dùng, mới nhất trước.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookingListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /bookings/{bookingId}:
+    get:
+      tags: [Bookings]
+      summary: Chi tiết booking của tôi
+      operationId: getMyBooking
+      x-implementation-status: planned
+      description: Booking không thuộc người dùng trả 404 để không lộ sự tồn tại.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/BookingId' }
+      responses:
+        '200':
+          description: Chi tiết booking.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookingResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /bookings/{bookingId}/cancel:
+    post:
+      tags: [Bookings]
+      summary: Hủy booking của tôi trước slot đầu tiên
+      operationId: cancelMyBooking
+      x-implementation-status: planned
+      description: Không tính phí; booking và slot vẫn giữ trong lịch sử.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/BookingId' }
+      responses:
+        '200':
+          description: Booking đã hủy.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookingResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /admin/sport-types:
+    get:
+      tags: [Admin]
+      summary: Danh sách loại thể thao cho quản trị, gồm bản ngừng kích hoạt
+      operationId: listAdminSportTypes
+      x-implementation-status: planned
+      security: [{ bearerAuth: [] }]
+      description: Chỉ ADMIN.
+      responses:
+        '200':
+          description: Tất cả loại thể thao.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/SportType' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [Admin]
+      summary: Tạo loại thể thao
+      operationId: createSportType
+      x-implementation-status: planned
+      security: [{ bearerAuth: [] }]
+      description: Chỉ ADMIN.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SportTypeWrite' }
+      responses:
+        '201':
+          description: Đã tạo.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SportTypeResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /admin/sport-types/{sportTypeId}:
+    patch:
+      tags: [Admin]
+      summary: Sửa hoặc ngừng kích hoạt loại thể thao
+      operationId: updateSportType
+      x-implementation-status: planned
+      security: [{ bearerAuth: [] }]
+      description: Chỉ ADMIN. Không xóa bản ghi đã được tham chiếu.
+      parameters:
+        - { $ref: '#/components/parameters/SportTypeId' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SportTypePatch' }
+      responses:
+        '200':
+          description: Đã cập nhật.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SportTypeResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+    delete:
+      tags: [Admin]
+      summary: Ngừng kích hoạt loại thể thao bằng xóa mềm
+      operationId: deactivateSportType
+      x-implementation-status: planned
+      security: [{ bearerAuth: [] }]
+      description: Chỉ ADMIN. Đặt isActive=false, giữ bản ghi và lịch sử. Từ chối nếu còn sân đang hoạt động thuộc loại này; gọi lại trên bản đã ngừng kích hoạt vẫn trả 204.
+      parameters:
+        - { $ref: '#/components/parameters/SportTypeId' }
+      responses:
+        '204': { description: Đã ngừng kích hoạt; không có body. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /admin/courts:
+    get:
+      tags: [Admin]
+      summary: Danh sách sân cho quản trị, gồm bản ngừng kích hoạt
+      operationId: listAdminCourts
+      x-implementation-status: planned
+      security: [{ bearerAuth: [] }]
+      description: Chỉ ADMIN.
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/PageSize' }
+      responses:
+        '200':
+          description: Danh sách sân và phân trang.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CourtListResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [Admin]
+      summary: Tạo sân và chính sách slot
+      operationId: createCourt
+      x-implementation-status: planned
+      security: [{ bearerAuth: [] }]
+      description: Chỉ ADMIN. Mặc định 60 phút, ít nhất 1 và tối đa 4 slot.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CourtWrite' }
+      responses:
+        '201':
+          description: Đã tạo.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CourtResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /admin/courts/{courtId}:
+    patch:
+      tags: [Admin]
+      summary: Sửa hoặc ngừng kích hoạt sân
+      operationId: updateCourt
+      x-implementation-status: planned
+      security: [{ bearerAuth: [] }]
+      description: Chỉ ADMIN. Đổi chính sách slot phải tái tạo mẫu slot hiện hành trong cùng giao dịch.
+      parameters:
+        - { $ref: '#/components/parameters/CourtId' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CourtPatch' }
+      responses:
+        '200':
+          description: Đã cập nhật.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CourtResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+    delete:
+      tags: [Admin]
+      summary: Ngừng kích hoạt sân bằng xóa mềm
+      operationId: deactivateCourt
+      x-implementation-status: planned
+      security: [{ bearerAuth: [] }]
+      description: Chỉ ADMIN. Đặt isActive=false, không nhận booking mới; booking đã xác nhận và lịch sử vẫn giữ. Gọi lại trên bản đã ngừng kích hoạt vẫn trả 204.
+      parameters:
+        - { $ref: '#/components/parameters/CourtId' }
+      responses:
+        '204': { description: Đã ngừng kích hoạt; không có body. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /admin/courts/{courtId}/operating-hours:
+    get:
+      tags: [Admin]
+      summary: Xem lịch mở cửa và mẫu slot hiện hành của sân
+      operationId: getOperatingHours
+      x-implementation-status: planned
+      security: [{ bearerAuth: [] }]
+      description: Chỉ ADMIN. Giờ theo APP_TIMEZONE của địa điểm, thứ theo ISO 1–7.
+      parameters:
+        - { $ref: '#/components/parameters/CourtId' }
+      responses:
+        '200':
+          description: Lịch mở cửa và các mẫu time_slots đang hoạt động.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OperatingHoursResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Admin]
+      summary: Thay thế lịch mở cửa hằng tuần của sân
+      operationId: replaceOperatingHours
+      x-implementation-status: planned
+      security: [{ bearerAuth: [] }]
+      description: Chỉ ADMIN. Tạo lại time_slots cho lịch hiện hành; booking cũ giữ snapshot thời gian.
+      parameters:
+        - { $ref: '#/components/parameters/CourtId' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [hours]
+              properties:
+                hours:
+                  type: array
+                  items: { $ref: '#/components/schemas/OperatingHourInput' }
+      responses:
+        '200':
+          description: Lịch mới và mẫu slot hiện hành.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OperatingHoursResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /admin/courts/{courtId}/blackouts:
+    get:
+      tags: [Admin]
+      summary: Danh sách lịch chặn của sân
+      operationId: listCourtBlackouts
+      x-implementation-status: planned
+      security: [{ bearerAuth: [] }]
+      description: Chỉ ADMIN.
+      parameters:
+        - { $ref: '#/components/parameters/CourtId' }
+      responses:
+        '200':
+          description: Lịch chặn, gồm cả bản đã ngừng kích hoạt.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Blackout' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [Admin]
+      summary: Tạo lịch chặn
+      operationId: createCourtBlackout
+      x-implementation-status: planned
+      security: [{ bearerAuth: [] }]
+      description: Chỉ ADMIN. Booking đã xác nhận không bị tự hủy.
+      parameters:
+        - { $ref: '#/components/parameters/CourtId' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BlackoutWrite' }
+      responses:
+        '201':
+          description: Đã tạo lịch chặn.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BlackoutResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /admin/courts/{courtId}/blackouts/{blackoutId}:
+    patch:
+      tags: [Admin]
+      summary: Sửa hoặc ngừng kích hoạt lịch chặn
+      operationId: updateCourtBlackout
+      x-implementation-status: planned
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/CourtId' }
+        - { $ref: '#/components/parameters/BlackoutId' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BlackoutPatch' }
+      responses:
+        '200':
+          description: Đã cập nhật.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BlackoutResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+    delete:
+      tags: [Admin]
+      summary: Tắt lịch chặn bằng xóa mềm
+      operationId: deactivateCourtBlackout
+      x-implementation-status: planned
+      security: [{ bearerAuth: [] }]
+      description: Chỉ ADMIN. Đặt isActive=false; giữ lịch sử và audit. Gọi lại trên bản đã tắt vẫn trả 204.
+      parameters:
+        - { $ref: '#/components/parameters/CourtId' }
+        - { $ref: '#/components/parameters/BlackoutId' }
+      responses:
+        '204': { description: Đã tắt lịch chặn; không có body. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /admin/bookings:
+    get:
+      tags: [Admin]
+      summary: Tra cứu booking cho quản trị
+      operationId: listAdminBookings
+      x-implementation-status: planned
+      security: [{ bearerAuth: [] }]
+      description: Chỉ ADMIN. Quyền sửa trạng thái booking ngoài luồng hủy của chủ sở hữu chưa được SRS định nghĩa.
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/PageSize' }
+        - name: courtId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: date
+          in: query
+          schema: { type: string, format: date }
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/BookingStatus' }
+      responses:
+        '200':
+          description: Danh sách booking theo bộ lọc.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BookingListResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /admin/bookings/{bookingId}:
+    get:
+      tags: [Admin]
+      summary: Chi tiết booking cho quản trị
+      operationId: getAdminBooking
+      x-implementation-status: planned
+      security: [{ bearerAuth: [] }]
+      description: Chỉ ADMIN; dùng để tra cứu và đối chiếu xử lý ngoài hệ thống.
+      parameters:
+        - { $ref: '#/components/parameters/BookingId' }
+      responses:
+        '200':
+          description: Chi tiết booking.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BookingResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /admin/bookings/{bookingId}/cancel:
+    post:
+      tags: [Admin]
+      summary: Admin hủy booking bị ảnh hưởng và ghi lý do
+      operationId: cancelAdminBooking
+      x-implementation-status: planned
+      security: [{ bearerAuth: [] }]
+      description: Chỉ ADMIN. Xử lý riêng sau thay đổi lịch hoặc blackout; không tự hủy booking. Chỉ hủy trước slot đầu tiên, giữ booking/slot trong lịch sử và ghi lý do vào audit log.
+      parameters:
+        - { $ref: '#/components/parameters/BookingId' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AdminCancelBookingRequest' }
+      responses:
+        '200':
+          description: Booking đã hủy.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BookingResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /admin/statistics:
+    get:
+      tags: [Admin]
+      summary: Thống kê số booking cơ bản
+      operationId: getAdminStatistics
+      x-implementation-status: planned
+      security: [{ bearerAuth: [] }]
+      description: Chỉ ADMIN. Đếm theo bookingDate địa phương, gồm hai biên ngày.
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          required: true
+          schema: { type: string, format: date }
+      responses:
+        '200':
+          description: Số lượt theo trạng thái hiện tại.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StatisticsResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT access token; sub là user UUID, role là USER/ADMIN, có iat và exp.
+  parameters:
+    CourtId:
+      name: courtId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    BookingId:
+      name: bookingId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    SportTypeId:
+      name: sportTypeId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    BlackoutId:
+      name: blackoutId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    Search:
+      name: q
+      in: query
+      description: Tìm theo tên hoặc mã sân, không phân biệt chữ hoa/thường.
+      schema: { type: string, maxLength: 100 }
+    SportTypeFilter:
+      name: sportTypeId
+      in: query
+      schema: { type: string, format: uuid }
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 1, default: 1 }
+    PageSize:
+      name: pageSize
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Chuỗi opaque 1–128 ký tự, duy nhất theo người dùng; cùng khóa và nội dung trả booking ban đầu.
+      schema: { type: string, minLength: 1, maxLength: 128 }
+  responses:
+    InternalError:
+      description: Lỗi hệ thống; không trả thông tin SQL hoặc credential.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    BadRequest:
+      description: Dữ liệu hoặc tham số không hợp lệ (validation_error).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Unauthorized:
+      description: Chưa đăng nhập, token sai/hết hạn hoặc thông tin đăng nhập sai (unauthorized/invalid_credentials).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Forbidden:
+      description: Không đủ quyền hoặc tài khoản bị khóa (forbidden/account_inactive).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    NotFound:
+      description: Không tìm thấy hoặc không thuộc quyền truy cập (not_found).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Conflict:
+      description: Xung đột trạng thái (email_taken/slot_unavailable/idempotency_conflict/already_cancelled/cancellation_closed/resource_has_active_children).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Unprocessable:
+      description: Yêu cầu đúng cú pháp nhưng vi phạm quy tắc đặt sân (booking_rule_violation).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    ServiceUnavailable:
+      description: Dịch vụ tạm không sẵn sàng (service_unavailable).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+  schemas:
+    Ping:
+      type: object
+      required: [message, service, environment]
+      properties:
+        message: { type: string, example: pong }
+        service: { type: string, example: sport-booking-api }
+        environment: { type: string, example: development }
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, requestId]
+          properties:
+            code: { type: string, example: slot_unavailable }
+            message: { type: string, example: Khung giờ đã được đặt. Vui lòng chọn giờ khác. }
+            requestId: { type: string, description: Giá trị X-Request-ID; thường là UUID. }
+            details:
+              type: array
+              items:
+                type: object
+                required: [field, message]
+                properties:
+                  field: { type: string, example: slotIds }
+                  message: { type: string, example: Phải chọn các slot liên tiếp. }
+    PageMeta:
+      type: object
+      required: [page, pageSize, total]
+      properties:
+        page: { type: integer, minimum: 1 }
+        pageSize: { type: integer, minimum: 1 }
+        total: { type: integer, minimum: 0 }
+    User:
+      type: object
+      required: [id, email, fullName, role, status, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        fullName: { type: string }
+        phone: { type: string, nullable: true }
+        role: { type: string, enum: [USER, ADMIN] }
+        status: { type: string, enum: [ACTIVE, INACTIVE] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    UserResponse:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/User' }
+    RegisterRequest:
+      type: object
+      additionalProperties: false
+      required: [email, password, fullName]
+      properties:
+        email: { type: string, format: email, maxLength: 254 }
+        password: { type: string, format: password, minLength: 8, maxLength: 72, description: "Tối đa 72 byte UTF-8; không tự trim mật khẩu." }
+        fullName: { type: string, minLength: 1, maxLength: 120 }
+        phone: { type: string, maxLength: 30 }
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, format: password }
+    LoginResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [accessToken, tokenType, expiresAt, user]
+          properties:
+            accessToken: { type: string }
+            tokenType: { type: string, enum: [Bearer] }
+            expiresAt: { type: string, format: date-time }
+            user: { $ref: '#/components/schemas/User' }
+    UpdateProfileRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        fullName: { type: string, minLength: 1, maxLength: 120 }
+        phone: { type: string, nullable: true, maxLength: 30 }
+    SportType:
+      type: object
+      required: [id, name, isActive]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string, nullable: true }
+        isActive: { type: boolean }
+    SportTypeResponse:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/SportType' }
+    SportTypeWrite:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        description: { type: string, nullable: true }
+        isActive: { type: boolean, default: true }
+    SportTypePatch:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        description: { type: string, nullable: true }
+        isActive: { type: boolean }
+    Court:
+      type: object
+      required: [id, sportTypeId, code, name, isActive, slotDurationMinutes, minConsecutiveSlots, maxConsecutiveSlots]
+      properties:
+        id: { type: string, format: uuid }
+        sportTypeId: { type: string, format: uuid }
+        code: { type: string }
+        name: { type: string }
+        description: { type: string, nullable: true }
+        isActive: { type: boolean }
+        slotDurationMinutes: { type: integer, minimum: 1, example: 60 }
+        minConsecutiveSlots: { type: integer, minimum: 1, example: 1 }
+        maxConsecutiveSlots: { type: integer, minimum: 1, example: 4 }
+        referencePriceAmount:
+          type: string
+          nullable: true
+          pattern: '^\d+(\.\d{1,2})?$'
+          description: Decimal string để tránh sai số số thực; chỉ để tham khảo, không thu tiền.
+        referencePriceCurrency: { type: string, nullable: true, minLength: 3, maxLength: 3, example: VND }
+    CourtResponse:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/Court' }
+    CourtListResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/Court' }
+        meta: { $ref: '#/components/schemas/PageMeta' }
+    CourtWrite:
+      type: object
+      additionalProperties: false
+      required: [sportTypeId, code, name]
+      properties:
+        sportTypeId: { type: string, format: uuid }
+        code: { type: string, minLength: 1, maxLength: 50 }
+        name: { type: string, minLength: 1, maxLength: 120 }
+        description: { type: string, nullable: true }
+        isActive: { type: boolean, default: true }
+        slotDurationMinutes: { type: integer, minimum: 1, default: 60 }
+        minConsecutiveSlots: { type: integer, minimum: 1, default: 1 }
+        maxConsecutiveSlots: { type: integer, minimum: 1, default: 4 }
+        referencePriceAmount: { type: string, nullable: true, pattern: '^\d+(\.\d{1,2})?$' }
+        referencePriceCurrency: { type: string, nullable: true, minLength: 3, maxLength: 3 }
+    CourtPatch:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        sportTypeId: { type: string, format: uuid }
+        code: { type: string, minLength: 1, maxLength: 50 }
+        name: { type: string, minLength: 1, maxLength: 120 }
+        description: { type: string, nullable: true }
+        isActive: { type: boolean }
+        slotDurationMinutes: { type: integer, minimum: 1 }
+        minConsecutiveSlots: { type: integer, minimum: 1 }
+        maxConsecutiveSlots: { type: integer, minimum: 1 }
+        referencePriceAmount: { type: string, nullable: true, pattern: '^\d+(\.\d{1,2})?$' }
+        referencePriceCurrency: { type: string, nullable: true, minLength: 3, maxLength: 3 }
+    AvailabilityResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [courtId, date, timeZone, slots]
+          properties:
+            courtId: { type: string, format: uuid }
+            date: { type: string, format: date }
+            timeZone: { type: string, example: Asia/Bangkok }
+            slots:
+              type: array
+              items:
+                type: object
+                required: [id, startsAt, endsAt, available]
+                properties:
+                  id: { type: string, format: uuid, description: ID mẫu time_slots tuần. }
+                  startsAt: { type: string, format: date-time, description: UTC. }
+                  endsAt: { type: string, format: date-time, description: UTC. }
+                  available: { type: boolean }
+    BookingStatus:
+      type: string
+      enum: [CONFIRMED, CANCELLED]
+    BookingSlot:
+      type: object
+      required: [timeSlotId, startsAt, endsAt]
+      properties:
+        timeSlotId: { type: string, format: uuid }
+        startsAt: { type: string, format: date-time, description: UTC snapshot. }
+        endsAt: { type: string, format: date-time, description: UTC snapshot. }
+    Booking:
+      type: object
+      required: [id, bookingCode, customerId, courtId, bookingDate, status, slots, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        bookingCode: { type: string }
+        customerId: { type: string, format: uuid }
+        courtId: { type: string, format: uuid }
+        bookingDate: { type: string, format: date, description: Ngày địa phương. }
+        status: { $ref: '#/components/schemas/BookingStatus' }
+        slots:
+          type: array
+          minItems: 1
+          items: { $ref: '#/components/schemas/BookingSlot' }
+        createdAt: { type: string, format: date-time }
+        cancelledAt: { type: string, format: date-time, nullable: true }
+    BookingResponse:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/Booking' }
+    BookingListResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/Booking' }
+        meta: { $ref: '#/components/schemas/PageMeta' }
+    CreateBookingRequest:
+      type: object
+      additionalProperties: false
+      required: [courtId, bookingDate, timeSlotIds]
+      properties:
+        courtId: { type: string, format: uuid }
+        bookingDate: { type: string, format: date }
+        timeSlotIds:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          description: ID time_slots theo thứ tự thời gian, cùng sân/ngày và liên tiếp.
+          items: { type: string, format: uuid }
+    AdminCancelBookingRequest:
+      type: object
+      additionalProperties: false
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+          description: Lý do quản trị, ghi vào audit log, không thay đổi dữ liệu booking lịch sử.
+    OperatingHourInput:
+      type: object
+      additionalProperties: false
+      required: [weekday, opensAt, closesAt]
+      properties:
+        weekday: { type: integer, minimum: 1, maximum: 7, description: ISO 1=thứ Hai. }
+        opensAt: { type: string, pattern: '^([01]\d|2[0-3]):[0-5]\d:[0-5]\d$', example: '08:00:00' }
+        closesAt: { type: string, pattern: '^([01]\d|2[0-3]):[0-5]\d:[0-5]\d$', example: '22:00:00' }
+    TimeSlotTemplate:
+      type: object
+      required: [id, weekday, startsAt, endsAt]
+      properties:
+        id: { type: string, format: uuid }
+        weekday: { type: integer, minimum: 1, maximum: 7 }
+        startsAt: { type: string, pattern: '^([01]\d|2[0-3]):[0-5]\d:[0-5]\d$', example: '08:00:00' }
+        endsAt: { type: string, pattern: '^([01]\d|2[0-3]):[0-5]\d:[0-5]\d$', example: '09:00:00' }
+    OperatingHoursResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [courtId, timeZone, hours, timeSlots]
+          properties:
+            courtId: { type: string, format: uuid }
+            timeZone: { type: string, example: Asia/Bangkok }
+            hours:
+              type: array
+              items: { $ref: '#/components/schemas/OperatingHourInput' }
+            timeSlots:
+              type: array
+              description: Mẫu slot tuần hiện hành được tạo từ lịch mở cửa và chính sách sân.
+              items: { $ref: '#/components/schemas/TimeSlotTemplate' }
+    Blackout:
+      type: object
+      required: [id, courtId, startsAt, endsAt, isActive, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        courtId: { type: string, format: uuid }
+        startsAt: { type: string, format: date-time, description: UTC. }
+        endsAt: { type: string, format: date-time, description: UTC. }
+        reason: { type: string, nullable: true }
+        isActive: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    BlackoutResponse:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/Blackout' }
+    BlackoutWrite:
+      type: object
+      additionalProperties: false
+      required: [startsAt, endsAt]
+      properties:
+        startsAt: { type: string, format: date-time }
+        endsAt: { type: string, format: date-time }
+        reason: { type: string, nullable: true }
+    BlackoutPatch:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        startsAt: { type: string, format: date-time }
+        endsAt: { type: string, format: date-time }
+        reason: { type: string, nullable: true }
+        isActive: { type: boolean }
+    StatisticsResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [from, to, totalBookings, confirmedBookings, cancelledBookings]
+          properties:
+            from: { type: string, format: date }
+            to: { type: string, format: date }
+            totalBookings: { type: integer, minimum: 0 }
+            confirmedBookings: { type: integer, minimum: 0 }
+            cancelledBookings: { type: integer, minimum: 0 }

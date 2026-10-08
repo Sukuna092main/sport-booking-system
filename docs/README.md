@@ -13,6 +13,8 @@ Các Google Docs Final là nguồn baseline; các thư mục này dành cho tech
 
 ## Tổ chức
 
+- [Đề xuất kế hoạch chuyển sang môi trường online](planning/ONLINE_ENVIRONMENT_PLAN_CHANGE.md) — ngày 06/10/2026; chờ Huy (PM) review. Phương án môi trường S1, task/checklist, phụ thuộc, công sức và đề xuất cập nhật Trello/Final; chưa phải thay đổi đã phê duyệt hoặc triển khai.
+
 `requirements/`: requirement/traceability bổ sung; `planning/`: mapping WBS/task và actuals; `design/`: architecture/UI/API/ERD; `testing/`: test plan/report; `uat/`: scenarios/Acceptance Record; `operations/`: deploy/config/backup/restore/handoff; `project-control/`: risk/issue/CR/decision records.
 
 Người soạn: Duy/Hưng. Reviewer: Huy (PM). Mỗi artifact ghi requirement/WBS/task, version và evidence liên quan. Không tạo kết quả kiểm thử, số liệu, chữ ký hay acceptance chưa có.

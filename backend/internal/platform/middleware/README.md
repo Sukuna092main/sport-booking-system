@@ -1,5 +1,3 @@
 # middleware
 
-Request logging, auth context và role middleware dùng chung. Ownership/business authorization vẫn kiểm tra trong service.
-
-Scaffold: chưa có code thực thi.
+Middleware Gin dùng chung cấp request ID do server tạo và ghi thông tin request. Xác thực và kiểm tra vai trò sẽ được thêm trong task Auth; kiểm tra quyền sở hữu và quy tắc phân quyền nghiệp vụ thuộc service.
