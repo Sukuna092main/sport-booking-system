@@ -73,8 +73,8 @@ go build ./...
 ## GitHub và tên nhánh
 
 Tài khoản dùng: `huyhcm2k5it`. Đã đăng xuất `phuhuyhcm` khỏi Git Credential Manager.
-Nhánh theo quy định Huy chốt: `be_auth_register_login`, `be_auth_role_middleware`,
-`be_court_data_foundation`, `be_user_profile`, `be_court_list_detail`, `be_court_availability`.
+Nhánh theo quy định Huy chốt: `feature/be_auth_register_login`, `feature/be_auth_role_middleware`,
+`feature/be_court_data_foundation`, `feature/be_user_profile`, `feature/be_court_list_detail`, `feature/be_court_availability`.
 Mỗi task có PR vào develop; chỉ merge khi Backend/Frontend CI đạt.
 
 | Task | PR |

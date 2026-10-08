@@ -87,9 +87,9 @@ Tất cả nhánh `feature/*`, `fix/*`, `docs/*` mặc định tạo từ `devel
 
 ### Quy định nhánh Backend — Huy chốt 08/10/2026
 
-Task Backend dùng `be_<ten_task>`, viết thường và ngăn cách bằng dấu gạch dưới.
-Ví dụ: `be_auth_register_login`, `be_auth_role_middleware`, `be_user_profile`,
-`be_court_data_foundation`, `be_court_list_detail`, `be_court_availability`.
+Task Backend dùng `feature/be_<ten_task>`, viết thường và ngăn cách bằng dấu gạch dưới.
+Ví dụ: `feature/be_auth_register_login`, `feature/be_auth_role_middleware`, `feature/be_user_profile`,
+`feature/be_court_data_foundation`, `feature/be_court_list_detail`, `feature/be_court_availability`.
 Tạo từ `develop` mới nhất, mỗi task một nhánh/PR vào `develop`, test và review trước merge.
 
 ### `feature/*`
@@ -99,17 +99,17 @@ Dùng cho tính năng mới.
 Ví dụ phù hợp với Sport Booking System:
 
 ```text
-be_auth_register_login
-be_auth_role_middleware
-be_user_profile
-be_court_list_detail
-be_court_availability
-be_court_blackout
-be_booking_create
-be_booking_history
-be_booking_cancel
-be_admin_court_management
-be_admin_booking_management
+feature/be_auth_register_login
+feature/be_auth_role_middleware
+feature/be_user_profile
+feature/be_court_list_detail
+feature/be_court_availability
+feature/be_court_blackout
+feature/be_booking_create
+feature/be_booking_history
+feature/be_booking_cancel
+feature/be_admin_court_management
+feature/be_admin_booking_management
 feature/github-actions-ci
 feature/docker-compose
 ```
@@ -145,7 +145,7 @@ docs/github-workflow
 
 # 3. Quy tắc đặt tên branch
 
-Backend dùng `be_<ten_task>` với dấu gạch dưới, theo quy định ở mục 2.2.
+Backend dùng `feature/be_<ten_task>` với dấu gạch dưới, theo quy định ở mục 2.2.
 
 Cấu trúc:
 
@@ -156,7 +156,7 @@ Cấu trúc:
 Ví dụ:
 
 ```text
-be_booking_create
+feature/be_booking_create
 fix/double-booking
 docs/api-openapi
 ```
@@ -164,8 +164,8 @@ docs/api-openapi
 ### Nên
 
 ```text
-be_court_availability
-be_booking_cancel
+feature/be_court_availability
+feature/be_booking_cancel
 fix/login-validation
 ```
 
@@ -183,7 +183,7 @@ final-final
 Tên branch:
 
 - viết thường;
-- Backend dùng dấu `_`; các nhánh theo mẫu `<type>/...` dùng dấu `-`;
+- Backend dùng tiền tố `feature/be_` và dấu `_` giữa các từ; các nhánh khác dùng dấu `-`;
 - không dùng dấu tiếng Việt;
 - mô tả đúng task đang làm;
 - không quá dài.
@@ -303,7 +303,7 @@ Ví dụ task:
 Branch:
 
 ```text
-be_booking_create
+feature/be_booking_create
 ```
 
 ## Bước 1 — cập nhật `develop`
@@ -316,7 +316,7 @@ git pull origin develop
 ## Bước 2 — tạo branch
 
 ```bash
-git switch -c be_booking_create
+git switch -c feature/be_booking_create
 ```
 
 Kiểm tra:
@@ -374,7 +374,7 @@ git commit -m "feat: implement booking creation"
 Lần đầu:
 
 ```bash
-git push -u origin be_booking_create
+git push -u origin feature/be_booking_create
 ```
 
 Những lần sau:
@@ -396,7 +396,7 @@ Sau khi push branch:
 
 ```text
 base:    develop
-compare: be_booking_create
+compare: feature/be_booking_create
 ```
 
 5. Kiểm tra file thay đổi.
@@ -446,7 +446,7 @@ Không cần tạo PR mới.
 Chuyển về đúng branch:
 
 ```bash
-git switch be_booking_create
+git switch feature/be_booking_create
 ```
 
 Sửa code rồi:
@@ -466,7 +466,7 @@ PR trên GitHub sẽ tự cập nhật commit mới.
 Giả sử đang làm:
 
 ```text
-be_booking_create
+feature/be_booking_create
 ```
 
 Trong lúc đó có người khác merge code mới vào `develop`.
@@ -477,7 +477,7 @@ Cập nhật:
 git switch develop
 git pull origin develop
 
-git switch be_booking_create
+git switch feature/be_booking_create
 git merge develop
 ```
 
@@ -561,7 +561,7 @@ git pull origin develop
 Xóa branch local:
 
 ```bash
-git branch -d be_booking_create
+git branch -d feature/be_booking_create
 ```
 
 Dọn branch remote đã bị xóa:
@@ -573,7 +573,7 @@ git fetch --prune
 Nếu GitHub chưa tự xóa branch remote, có thể xóa:
 
 ```bash
-git push origin --delete be_booking_create
+git push origin --delete feature/be_booking_create
 ```
 
 ---
@@ -716,17 +716,17 @@ Tất cả thành viên:
 
 | Nhóm | Task | Branch |
 |---|---|---|
-| Backend | Auth Register/Login | `be_auth_register_login` |
-| Backend | Authorization Middleware | `be_auth_role_middleware` |
-| Backend | User/Profile | `be_user_profile` |
-| Backend | Court | `be_court_management` |
-| Backend | TimeSlot | `be_time_slot` |
-| Backend | CourtBlackout | `be_court_blackout` |
-| Backend | Availability | `be_court_availability` |
-| Backend | Booking | `be_booking_create` |
-| Backend | Booking History | `be_booking_history` |
-| Backend | Cancel Booking | `be_booking_cancel` |
-| Backend | Admin API | `be_admin_api` |
+| Backend | Auth Register/Login | `feature/be_auth_register_login` |
+| Backend | Authorization Middleware | `feature/be_auth_role_middleware` |
+| Backend | User/Profile | `feature/be_user_profile` |
+| Backend | Court | `feature/be_court_management` |
+| Backend | TimeSlot | `feature/be_time_slot` |
+| Backend | CourtBlackout | `feature/be_court_blackout` |
+| Backend | Availability | `feature/be_court_availability` |
+| Backend | Booking | `feature/be_booking_create` |
+| Backend | Booking History | `feature/be_booking_history` |
+| Backend | Cancel Booking | `feature/be_booking_cancel` |
+| Backend | Admin API | `feature/be_admin_api` |
 | Frontend | Auth UI | `feature/frontend-auth` |
 | Frontend | Court UI | `feature/frontend-court` |
 | Frontend | Availability UI | `feature/frontend-availability` |
@@ -762,7 +762,7 @@ git switch develop
 ## Tạo branch mới
 
 ```bash
-git switch -c be_booking_create
+git switch -c feature/be_booking_create
 ```
 
 ## Kiểm tra thay đổi
@@ -793,7 +793,7 @@ git log --oneline --graph --decorate --all
 ## Xóa branch local
 
 ```bash
-git branch -d be_booking_create
+git branch -d feature/be_booking_create
 ```
 
 ## Dọn reference branch cũ
