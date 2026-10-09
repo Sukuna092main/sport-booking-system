@@ -6,7 +6,7 @@ import {
   Lock,
 } from "lucide-react"
 import { AxiosError } from "axios"
-import { useAuth } from "@/features/auth/AuthContext"
+import { useAuth } from "@/features/auth/useAuth"
 import { authApi } from "@/lib/api/auth"
 import type { User } from "@/types/auth.types"
 
@@ -67,8 +67,8 @@ export function ProfilePage() {
   const navigate = useNavigate()
 
   const [profile, setProfile] = useState<User | null>(ctxUser)
-  const [isLoading, setIsLoading] = useState(true)
-  const [fetchError, setFetchError] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(true)   // starts true — effect resolves it
+  const [fetchError, setFetchError] = useState<string | null>(null) // starts null — effect sets on error
 
   // Edit mode state
   const [isEditing, setIsEditing] = useState(false)
@@ -80,8 +80,7 @@ export function ProfilePage() {
 
   /** Fetch fresh profile from GET /users/me on mount (doc §3.3 flow P1→P2) */
   useEffect(() => {
-    setIsLoading(true)
-    setFetchError(null)
+    // isLoading is already true and fetchError is already null from useState initializers
     authApi
       .getMe()
       .then(({ data }) => setProfile(data))

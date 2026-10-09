@@ -1,6 +1,6 @@
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom"
 import { LogOut } from "lucide-react"
-import { useAuth } from "@/features/auth/AuthContext"
+import { useAuth } from "@/features/auth/useAuth"
 
 /** Brand logo — used in the header */
 function BrandLogo() {
