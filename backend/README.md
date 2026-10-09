@@ -40,6 +40,18 @@ go run ./cmd/api
 
 JWT_SECRET tối thiểu 32 byte; TTL từ 1 phút đến 24 giờ. Không đổi secret mỗi lần khởi động môi trường chung: token cũ sẽ mất hiệu lực. Production/Neon bắt buộc TLS. Log không ghi body, Authorization, hash mật khẩu hoặc SQL parameters.
 
+### CORS khi tích hợp frontend
+
+Đặt `CORS_ALLOWED_ORIGINS` thành danh sách origin FE thật, phân cách bằng dấu phẩy. Origin gồm scheme, host và port nếu có; không chứa đường dẫn `/api/v1`, query, credential hoặc wildcard. Ví dụ local:
+
+```powershell
+$env:CORS_ALLOWED_ORIGINS = "http://localhost:5173,http://127.0.0.1:5173"
+```
+
+Khi biến chưa được đặt, development dùng hai origin local trên; test/production dùng allowlist rỗng. Đặt biến thành chuỗi rỗng để đóng CORS. Cấu hình sai làm server từ chối khởi động. Với online, Hưng cấu hình origin HTTPS thật do Duy bàn giao rồi redeploy; phải smoke trên URL thực tế.
+
+Preflight `OPTIONS` từ origin trong allowlist trả 204, hỗ trợ các method REST và headers `Authorization`, `Content-Type`, `Accept`, `X-Request-ID`. Origin/header/method không được phép khiến preflight trả lỗi. Response thực từ origin được phép vẫn giữ mã lỗi Auth 400/401/403 và expose `X-Request-ID`. Không bật cookie credentials. CORS kiểm soát quyền trình duyệt đọc response; JWT và role middleware tiếp tục kiểm soát API, kể cả với curl hoặc Swagger cùng origin.
+
 ### Docker cục bộ
 
 Tạo JWT_SECRET trong shell như trên, rồi từ root repo chạy `docker compose up --build`. Compose dùng DB cục bộ và volume riêng. Không đổi URL dịch vụ migrate sang Neon nếu chưa kiểm tra migration/dữ liệu với người quản lý DB.

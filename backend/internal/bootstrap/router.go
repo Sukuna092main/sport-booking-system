@@ -37,6 +37,7 @@ func newRouter(cfg config.Config, log *slog.Logger, db *sql.DB, now func() time.
 	router := gin.New()
 	router.HandleMethodNotAllowed = true
 	router.Use(middleware.RequestID(), middleware.AccessLog(log), middleware.Recovery(log))
+	router.Use(middleware.CORS(cfg.CORSAllowedOrigins))
 	_ = router.SetTrustedProxies(nil)
 	router.NoRoute(func(c *gin.Context) {
 		response.Error(c, http.StatusNotFound, "not_found", "Không tìm thấy tài nguyên.")
