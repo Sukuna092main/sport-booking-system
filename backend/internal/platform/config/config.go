@@ -23,13 +23,14 @@ type Config struct {
 	LogLevel              string
 
 	// PostgreSQL (Neon)
-	DatabaseURL       string
-	DBMaxOpenConns    int
-	DBMaxIdleConns    int
-	DBConnMaxLifetime time.Duration
-	DBConnMaxIdleTime time.Duration
-	JWTSecret         string
-	JWTTTL            time.Duration
+	DatabaseURL        string
+	DBMaxOpenConns     int
+	DBMaxIdleConns     int
+	DBConnMaxLifetime  time.Duration
+	DBConnMaxIdleTime  time.Duration
+	JWTSecret          string
+	JWTTTL             time.Duration
+	CORSAllowedOrigins []string
 }
 
 func Load() (Config, error) {
@@ -73,6 +74,14 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 	if cfg.DBConnMaxIdleTime, err = durationValue("DB_CONN_MAX_IDLE_TIME", 5*time.Minute); err != nil {
+		return Config{}, err
+	}
+
+	rawOrigins, configured := os.LookupEnv("CORS_ALLOWED_ORIGINS")
+	if !configured && cfg.Environment == "development" {
+		rawOrigins = "http://localhost:5173,http://127.0.0.1:5173"
+	}
+	if cfg.CORSAllowedOrigins, err = parseCORSOrigins(rawOrigins); err != nil {
 		return Config{}, err
 	}
 
@@ -138,6 +147,12 @@ func (c Config) Validate() error {
 			return fmt.Errorf("DATABASE_URL must require TLS for production/Neon")
 		}
 	}
+	for _, origin := range c.CORSAllowedOrigins {
+		canonical, err := canonicalOrigin(origin)
+		if err != nil || canonical != origin {
+			return fmt.Errorf("CORS_ALLOWED_ORIGINS must use serialized HTTP origins")
+		}
+	}
 	if c.DBMaxOpenConns < 1 {
 		return fmt.Errorf("DB_MAX_OPEN_CONNS must be at least 1")
 	}
@@ -180,4 +195,57 @@ func durationValue(name string, fallback time.Duration) (time.Duration, error) {
 		return 0, fmt.Errorf("%s must be a valid duration: %w", name, err)
 	}
 	return duration, nil
+}
+
+// Empty explicitly disables cross-origin browser access; it does not disable JWT authorization.
+func parseCORSOrigins(raw string) ([]string, error) {
+	if strings.TrimSpace(raw) == "" {
+		return nil, nil
+	}
+	var origins []string
+	seen := map[string]bool{}
+	for _, entry := range strings.Split(raw, ",") {
+		origin, err := canonicalOrigin(strings.TrimSpace(entry))
+		if err != nil {
+			return nil, fmt.Errorf("CORS_ALLOWED_ORIGINS must contain HTTP origins without credentials, paths, queries, fragments or wildcards")
+		}
+		if !seen[origin] {
+			origins = append(origins, origin)
+			seen[origin] = true
+		}
+	}
+	return origins, nil
+}
+
+func canonicalOrigin(raw string) (string, error) {
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return "", fmt.Errorf("invalid origin")
+	}
+	scheme := strings.ToLower(parsed.Scheme)
+	if (scheme != "http" && scheme != "https") || parsed.Hostname() == "" || parsed.User != nil || parsed.Opaque != "" || (parsed.Path != "" && parsed.Path != "/") || parsed.RawQuery != "" || parsed.ForceQuery || strings.Contains(raw, "#") || strings.Contains(parsed.Host, "*") {
+		return "", fmt.Errorf("invalid origin")
+	}
+	host := strings.ToLower(parsed.Hostname())
+	for _, char := range host {
+		if char > 127 || char <= 32 {
+			return "", fmt.Errorf("use the ASCII hostname serialized by the browser")
+		}
+	}
+	if strings.Contains(host, ":") {
+		if net.ParseIP(host) == nil {
+			return "", fmt.Errorf("invalid IPv6 origin")
+		}
+		host = "[" + host + "]"
+	}
+	if port := parsed.Port(); port != "" {
+		number, err := strconv.Atoi(port)
+		if err != nil || number < 1 || number > 65535 {
+			return "", fmt.Errorf("invalid origin port")
+		}
+		if !((scheme == "http" && number == 80) || (scheme == "https" && number == 443)) {
+			host += ":" + strconv.Itoa(number)
+		}
+	}
+	return scheme + "://" + host, nil
 }
