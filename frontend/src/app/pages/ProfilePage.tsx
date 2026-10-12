@@ -3,12 +3,12 @@ import { useNavigate } from "react-router-dom"
 import {
   Loader2, AlertCircle, Pencil, X, Check,
   User as UserIcon, Mail, Phone, Shield, Key, Activity,
-  Lock,
+  Lock, CheckCircle2,
 } from "lucide-react"
-import { AxiosError } from "axios"
 import { useAuth } from "@/features/auth/useAuth"
-import { authApi } from "@/lib/api/auth"
-import type { User } from "@/types/auth.types"
+import { useProfile } from "@/features/profile/useProfile"
+import { useUpdateProfile, parseUpdateError } from "@/features/profile/useUpdateProfile"
+import type { UpdateProfileFieldErrors } from "@/features/profile/useUpdateProfile"
 
 /* ──────────────────────────────────────────────
    Sub-components
@@ -42,18 +42,27 @@ function EditableField({
 }) {
   return (
     <div>
-      <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+      <label
+        htmlFor={`profile-field-${name}`}
+        className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-gray-400"
+      >
         {label}
       </label>
       <div className="relative">
         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">{icon}</span>
         <input
-          name={name} value={value} onChange={onChange} disabled={disabled}
+          id={`profile-field-${name}`}
+          name={name}
+          value={value}
+          onChange={onChange}
+          disabled={disabled}
           placeholder={placeholder}
-          className="block w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-9 pr-4 text-sm font-medium text-gray-800 focus:border-[#16A34A] focus:outline-none focus:ring-2 focus:ring-[#16A34A]/20 disabled:opacity-50"
+          aria-invalid={!!error}
+          aria-describedby={error ? `profile-err-${name}` : undefined}
+          className="block w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-9 pr-4 text-sm font-medium text-gray-800 focus:border-[#16A34A] focus:outline-none focus:ring-2 focus:ring-[#16A34A]/20 disabled:opacity-50 aria-invalid:border-red-400 aria-invalid:ring-2 aria-invalid:ring-red-200"
         />
       </div>
-      {error && <p className="mt-1 text-xs text-red-500">{error}</p>}
+      {error && <p id={`profile-err-${name}`} className="mt-1 text-xs text-red-500">{error}</p>}
     </div>
   )
 }
@@ -63,33 +72,35 @@ function EditableField({
    ────────────────────────────────────────────── */
 
 export function ProfilePage() {
-  const { user: ctxUser, logout } = useAuth()
+  const { logout } = useAuth()
   const navigate = useNavigate()
 
-  const [profile, setProfile] = useState<User | null>(ctxUser)
-  const [isLoading, setIsLoading] = useState(true)   // starts true — effect resolves it
-  const [fetchError, setFetchError] = useState<string | null>(null) // starts null — effect sets on error
+  /* ── Data fetching ── */
+  const { data: profile, isLoading, error: fetchError } = useProfile()
+  const updateMutation = useUpdateProfile()
 
-  // Edit mode state
+  /* ── Edit mode state ── */
   const [isEditing, setIsEditing] = useState(false)
   const [editFullName, setEditFullName] = useState("")
   const [editPhone, setEditPhone] = useState("")
-  const [editErrors, setEditErrors] = useState<{ fullName?: string; phone?: string }>({})
-  const [isSaving, setIsSaving] = useState(false)
+  const [editErrors, setEditErrors] = useState<UpdateProfileFieldErrors>({})
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [showSuccess, setShowSuccess] = useState(false)
 
-  /** Fetch fresh profile from GET /users/me on mount (doc §3.3 flow P1→P2) */
+  /* Hide success banner after 3 s */
   useEffect(() => {
-    // isLoading is already true and fetchError is already null from useState initializers
-    authApi
-      .getMe()
-      .then(({ data }) => setProfile(data))
-      .catch(() => setFetchError("Không thể tải hồ sơ. Vui lòng thử lại."))
-      .finally(() => setIsLoading(false))
-  }, [])
+    if (!showSuccess) return
+    const id = setTimeout(() => setShowSuccess(false), 3000)
+    return () => clearTimeout(id)
+  }, [showSuccess])
 
-  function handleLogout() { logout(); navigate("/login", { replace: true }) }
+  /* ── Auth ── */
+  function handleLogout() {
+    logout()
+    navigate("/login", { replace: true })
+  }
 
+  /* ── Edit helpers ── */
   function startEdit() {
     if (!profile) return
     setEditFullName(profile.fullName)
@@ -99,51 +110,73 @@ export function ProfilePage() {
     setIsEditing(true)
   }
 
-  function cancelEdit() { setIsEditing(false); setSaveError(null) }
+  function cancelEdit() {
+    setIsEditing(false)
+    setSaveError(null)
+    updateMutation.reset()
+  }
 
   function handleEditChange(e: React.ChangeEvent<HTMLInputElement>) {
     const { name, value } = e.target
     if (name === "fullName") setEditFullName(value)
     if (name === "phone") setEditPhone(value)
+    // Clear per-field error on change
     setEditErrors((p) => ({ ...p, [name]: undefined }))
     setSaveError(null)
   }
 
-  async function handleSave() {
-    const errors: { fullName?: string; phone?: string } = {}
-    if (!editFullName.trim()) errors.fullName = "Họ tên không được để trống."
-    else if (editFullName.trim().length > 120) errors.fullName = "Họ tên tối đa 120 ký tự."
-    if (editPhone && editPhone.length > 30) errors.phone = "Số điện thoại tối đa 30 ký tự."
-    if (Object.keys(errors).length > 0) { setEditErrors(errors); return }
+  /* ── Client-side validation (mirrors backend rules) ── */
+  function validate(): UpdateProfileFieldErrors {
+    const errors: UpdateProfileFieldErrors = {}
+    if (!editFullName.trim()) {
+      errors.fullName = "Họ tên không được để trống."
+    } else if ([...editFullName.trim()].length > 120) {
+      errors.fullName = "Họ tên tối đa 120 ký tự."
+    }
+    if (editPhone && [...editPhone].length > 30) {
+      errors.phone = "Số điện thoại tối đa 30 ký tự."
+    }
+    return errors
+  }
 
-    setIsSaving(true)
+  async function handleSave() {
+    // 1. Client validation
+    const clientErrors = validate()
+    if (Object.keys(clientErrors).length > 0) {
+      setEditErrors(clientErrors)
+      return
+    }
+
     setSaveError(null)
+    setEditErrors({})
+
     try {
-      const updated = await authApi.updateMe({
-        fullName: editFullName.trim(),
+      await updateMutation.mutateAsync({
+        fullName: editFullName,
         phone: editPhone.trim() || null,
       })
-      setProfile(updated.data)
       setIsEditing(false)
+      setShowSuccess(true)
     } catch (err) {
-      if (err instanceof AxiosError) {
-        const data = err.response?.data as { error?: { message?: string; details?: { field: string; message: string }[] } } | undefined
-        if (data?.error?.details?.length) {
-          const fe: { fullName?: string; phone?: string } = {}
-          data.error.details.forEach((d) => { (fe as Record<string, string>)[d.field] = d.message })
-          setEditErrors(fe)
-        } else {
-          setSaveError(data?.error?.message ?? "Lưu thất bại. Vui lòng thử lại.")
-        }
+      const parsed = parseUpdateError(err)
+      if (Object.keys(parsed.fieldErrors).length > 0) {
+        setEditErrors(parsed.fieldErrors)
       } else {
-        setSaveError("Không kết nối được đến máy chủ.")
+        setSaveError(parsed.message)
       }
-    } finally {
-      setIsSaving(false)
     }
   }
 
-  /* ---- Loading ---- */
+  /* ── Fetch error (network / 500) ── */
+  const fetchErrorMessage = (() => {
+    if (!fetchError) return null
+    const status = (fetchError as { response?: { status: number } })?.response?.status
+    if (status === 401) return "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại."
+    if (status === 403) return "Tài khoản của bạn đã bị vô hiệu hoá."
+    return "Không thể tải hồ sơ. Vui lòng thử lại."
+  })()
+
+  /* ── Loading state ── */
   if (isLoading) {
     return (
       <section className="flex min-h-[20rem] items-center justify-center">
@@ -153,27 +186,33 @@ export function ProfilePage() {
     )
   }
 
-  /* ---- Error ---- */
-  if (fetchError) {
+  /* ── Fetch error ── */
+  if (fetchErrorMessage) {
     return (
       <section className="py-10">
         <h1 className="mb-6 text-3xl font-black uppercase tracking-tight">Hồ sơ cá nhân</h1>
         <div role="alert" className="flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-600">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
           <div>
-            <p className="font-medium">{fetchError}</p>
-            <button onClick={() => window.location.reload()} className="mt-1 underline underline-offset-2 hover:no-underline">Tải lại trang</button>
+            <p className="font-medium">{fetchErrorMessage}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="mt-1 underline underline-offset-2 hover:no-underline"
+            >
+              Tải lại trang
+            </button>
           </div>
         </div>
       </section>
     )
   }
 
-  /* ---- Empty ---- */
+  /* ── No profile (should not happen after loading + no error) ── */
   if (!profile) return null
 
   const isAdmin = profile.role === "ADMIN"
   const initials = profile.fullName.charAt(0).toUpperCase()
+  const isSaving = updateMutation.isPending
 
   return (
     <section className="py-6">
@@ -182,10 +221,11 @@ export function ProfilePage() {
         <div>
           <p className="text-xs font-bold uppercase tracking-widest text-[#16A34A]">Tài khoản của tôi</p>
           <h1 className="mt-1 text-4xl font-black uppercase tracking-tight text-gray-900">Hồ sơ cá nhân</h1>
-          <p className="mt-1.5 text-sm text-gray-500">Xem và cập nhật thông tin cá bản của bạn.</p>
+          <p className="mt-1.5 text-sm text-gray-500">Xem và cập nhật thông tin cá nhân của bạn.</p>
         </div>
         {!isEditing && (
           <button
+            id="profile-edit-btn"
             onClick={startEdit}
             className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition-all hover:border-gray-300 hover:shadow"
           >
@@ -194,6 +234,18 @@ export function ProfilePage() {
           </button>
         )}
       </div>
+
+      {/* ── Success banner (auto-dismiss) ── */}
+      {showSuccess && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="mb-5 flex items-center gap-2 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700"
+        >
+          <CheckCircle2 className="h-4 w-4 shrink-0" />
+          Hồ sơ đã được cập nhật thành công.
+        </div>
+      )}
 
       {/* ── Two-column card layout ── */}
       <div className="grid gap-4 lg:grid-cols-[280px_1fr]">
@@ -228,7 +280,7 @@ export function ProfilePage() {
                   ? "border-purple-200 bg-purple-50 text-purple-700"
                   : "border-[#22C55E]/30 bg-[#22C55E]/10 text-[#15803D]"
               }`}>
-                + {profile.role}
+                {profile.role}
               </span>
             </div>
 
@@ -261,8 +313,13 @@ export function ProfilePage() {
             </div>
           </div>
 
+          {/* Save error */}
           {saveError && (
-            <div role="alert" className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+            <div
+              role="alert"
+              id="profile-save-error"
+              className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600"
+            >
               {saveError}
             </div>
           )}
@@ -281,7 +338,7 @@ export function ProfilePage() {
                   icon={<Phone className="h-4 w-4" />}
                   label="Số điện thoại" name="phone"
                   value={editPhone} onChange={handleEditChange}
-                  placeholder="Nhập số điện thoại" error={editErrors.phone} disabled={isSaving}
+                  placeholder="Nhập số điện thoại (tuỳ chọn)" error={editErrors.phone} disabled={isSaving}
                 />
               </div>
 
@@ -296,6 +353,7 @@ export function ProfilePage() {
               {/* Action buttons */}
               <div className="flex justify-end gap-3 pt-2">
                 <button
+                  id="profile-cancel-btn"
                   onClick={cancelEdit}
                   disabled={isSaving}
                   className="rounded-xl border border-gray-200 bg-white px-5 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
@@ -303,8 +361,10 @@ export function ProfilePage() {
                   Hủy
                 </button>
                 <button
+                  id="profile-save-btn"
                   onClick={handleSave}
                   disabled={isSaving}
+                  aria-busy={isSaving}
                   className="flex items-center gap-2 rounded-xl bg-[#B4FF00] px-5 py-2.5 text-sm font-bold text-gray-900 hover:bg-[#AAEF00] disabled:opacity-60"
                 >
                   {isSaving ? (
@@ -332,6 +392,7 @@ export function ProfilePage() {
       {/* Logout */}
       <div className="mt-6 flex justify-end">
         <button
+          id="profile-logout-btn"
           onClick={handleLogout}
           className="flex items-center gap-2 text-sm text-gray-400 hover:text-gray-700 transition-colors"
         >
