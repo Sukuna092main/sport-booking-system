@@ -8,6 +8,7 @@ import {
 import { useCourtById } from "@/features/courts/useCourts"
 import { useCourtAvailability } from "@/features/courts/useCourts"
 import { useSportTypes } from "@/features/courts/useCourts"
+import { useAuth } from "@/features/auth/useAuth"
 import type { AvailabilitySlot } from "@/types/court.types"
 
 /* ── Helpers ─────────────────────────────────────────────────────── */
@@ -40,17 +41,15 @@ function getDateString(offsetDays: number) {
   return d.toISOString().split("T")[0]
 }
 
-/** Build an array of { label, value } for the date picker (today + 6) */
+/** Build an array of { label, value } for the date picker (today + 29 = 30 days horizon per SRS C-01) */
 function buildDateOptions() {
-  return Array.from({ length: 7 }, (_, i) => {
+  return Array.from({ length: 30 }, (_, i) => {
     const dateStr = getDateString(i)
     const [y, m, d] = dateStr.split("-").map(Number)
     const date = new Date(y, m - 1, d)
-    const weekday = date.toLocaleDateString("en-US", { weekday: "short" }).toUpperCase()
+    const weekday = date.toLocaleDateString("vi-VN", { weekday: "short" })
     const dayNum = date.getDate()
-    const monthAbbr = date
-      .toLocaleDateString("en-US", { month: "short" })
-      .toUpperCase()
+    const monthAbbr = "T" + (date.getMonth() + 1)
     return { value: dateStr, weekday, day: dayNum, month: monthAbbr }
   })
 }
@@ -59,7 +58,7 @@ function buildDateOptions() {
 function getMonthYear(dateStr: string) {
   const [y, m, d] = dateStr.split("-").map(Number)
   const date = new Date(y, m - 1, d)
-  return date.toLocaleDateString("en-US", { month: "long", year: "numeric" })
+  return `Tháng ${date.getMonth() + 1}, ${date.getFullYear()}`
 }
 
 /* ── Slot status helpers ─────────────────────────────────────────── */
@@ -98,7 +97,7 @@ function SlotItem({
           <span className="font-medium">{timeRange}</span>
         </div>
         <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">
-          past
+          Đã qua
         </span>
       </div>
     )
@@ -121,7 +120,7 @@ function SlotItem({
           <span className="font-medium">{timeRange}</span>
         </div>
         <span className="text-[10px] font-semibold uppercase tracking-wide text-red-400">
-          booked
+          Đã đặt
         </span>
       </div>
     )
@@ -141,7 +140,7 @@ function SlotItem({
         </div>
         <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-[#15803D]">
           <CheckCircle className="h-3 w-3" />
-          selected
+          Đã chọn
         </span>
       </button>
     )
@@ -159,7 +158,7 @@ function SlotItem({
       </div>
       <span className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-[#16A34A]">
         <CheckCircle className="h-3 w-3" />
-        available
+        Còn trống
       </span>
     </button>
   )
@@ -201,6 +200,7 @@ function AvailabilitySkeleton() {
 export function CourtAvailabilityPage() {
   const { courtId } = useParams<{ courtId: string }>()
   const navigate = useNavigate()
+  const { isAuthenticated } = useAuth()
 
   const dateOptions = buildDateOptions()
   const [selectedDate, setSelectedDate] = useState(dateOptions[0].value)
@@ -267,12 +267,12 @@ export function CourtAvailabilityPage() {
         className="mb-4 flex w-fit items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-gray-400 hover:text-gray-700 transition-colors"
       >
         <ArrowLeft className="h-3.5 w-3.5" />
-        back to court
+        Quay lại chi tiết sân
       </Link>
 
       {/* ── Page heading ── */}
       <p className="text-[10px] font-bold uppercase tracking-widest text-[#16A34A]">
-        court availability
+        Lịch khả dụng của sân
       </p>
       <h1 className="mt-0.5 text-3xl font-black tracking-tight text-gray-900">
         {court?.name ?? ""}
@@ -292,7 +292,7 @@ export function CourtAvailabilityPage() {
       {/* ── Info banner ── */}
       <div className="mt-4 flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-700">
         <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-        Select one or more consecutive available slots.
+        Vui lòng chọn ngày và khung giờ còn trống để đặt sân.
       </div>
 
       {/* ── Two-column layout ── */}
@@ -304,7 +304,7 @@ export function CourtAvailabilityPage() {
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2 text-sm font-semibold text-gray-800">
               <CalendarDays className="h-4 w-4 text-gray-400" />
-              Select a date
+              Chọn ngày (30 ngày tới)
             </div>
             <span className="text-xs font-medium text-gray-400">
               {getMonthYear(selectedDate)}
@@ -346,30 +346,22 @@ export function CourtAvailabilityPage() {
           <div className="mt-5">
             <div className="flex items-center justify-between mb-3">
               <div>
-                <p className="text-sm font-semibold text-gray-800">Choose a time</p>
+                <p className="text-sm font-semibold text-gray-800">Chọn khung giờ</p>
                 <p className="text-xs text-gray-400">{fmtDate(selectedDate)}</p>
               </div>
               {/* Legend */}
               <div className="flex items-center gap-3 text-[10px] text-gray-400">
                 <span className="flex items-center gap-1">
                   <span className="h-2 w-2 rounded-full bg-[#22C55E]" />
-                  Available
-                </span>
-                <span className="flex items-center gap-1">
-                  <span className="h-2 w-2 rounded-full bg-amber-400" />
-                  Booked
+                  Còn trống
                 </span>
                 <span className="flex items-center gap-1">
                   <span className="h-2 w-2 rounded-full bg-red-400" />
-                  Reserved
+                  Đã đặt
                 </span>
                 <span className="flex items-center gap-1">
                   <span className="h-2 w-2 rounded-full bg-gray-300" />
-                  Past
-                </span>
-                <span className="flex items-center gap-1">
-                  <span className="h-2 w-2 rounded-full bg-gray-400" />
-                  Unavailable
+                  Đã qua
                 </span>
               </div>
             </div>
@@ -433,7 +425,7 @@ export function CourtAvailabilityPage() {
         {/* Right: selection summary */}
         <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
           <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-3">
-            your selection
+            Thông tin đã chọn
           </p>
 
           {selectedSlot ? (
@@ -444,15 +436,15 @@ export function CourtAvailabilityPage() {
 
               <div className="mt-4 space-y-2.5">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-500">Court</span>
+                  <span className="text-gray-500">Sân</span>
                   <span className="font-semibold text-gray-800">{court?.name}</span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-500">Date</span>
+                  <span className="text-gray-500">Ngày</span>
                   <span className="font-semibold text-gray-800">{formattedDate}</span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-500">Duration</span>
+                  <span className="text-gray-500">Thời lượng</span>
                   <span className="font-semibold text-gray-800">{duration}</span>
                 </div>
               </div>
@@ -462,32 +454,33 @@ export function CourtAvailabilityPage() {
                 id="availability-continue-booking"
                 className="mt-6 flex w-full items-center justify-between rounded-xl bg-[#B4FF00] px-5 py-3.5 text-sm font-bold text-gray-900 transition-colors hover:bg-[#AAEF00]"
                 onClick={() => {
-                  // Booking is planned (not yet implemented) — navigate will be wired
-                  // once booking feature is ready
+                  // Booking is planned (Sprint 3)
                   navigate(`/courts/${courtId}`)
                 }}
               >
-                Continue Booking
+                Tiếp tục đặt sân
                 <ArrowRight className="h-4 w-4" />
               </button>
-              <p className="mt-2 text-center text-[10px] text-gray-400">
-                You'll need to log in before continuing.
-              </p>
+              {!isAuthenticated && (
+                <p className="mt-2 text-center text-[10px] text-gray-400">
+                  Bạn cần đăng nhập trước khi tiếp tục đặt sân.
+                </p>
+              )}
             </>
           ) : (
             <>
-              <p className="text-xl font-black text-gray-400">No time selected</p>
+              <p className="text-xl font-black text-gray-400">Chưa chọn khung giờ</p>
               <div className="mt-4 space-y-2.5">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-400">Court</span>
+                  <span className="text-gray-400">Sân</span>
                   <span className="font-semibold text-gray-500">{court?.name}</span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-400">Date</span>
+                  <span className="text-gray-400">Ngày</span>
                   <span className="font-semibold text-gray-500">{formattedDate}</span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-400">Duration</span>
+                  <span className="text-gray-400">Thời lượng</span>
                   <span className="font-semibold text-gray-500">–</span>
                 </div>
               </div>
@@ -495,12 +488,14 @@ export function CourtAvailabilityPage() {
                 disabled
                 className="mt-6 flex w-full items-center justify-between rounded-xl bg-gray-100 px-5 py-3.5 text-sm font-bold text-gray-400 cursor-not-allowed"
               >
-                Continue Booking
+                Tiếp tục đặt sân
                 <ArrowRight className="h-4 w-4" />
               </button>
-              <p className="mt-2 text-center text-[10px] text-gray-400">
-                You'll need to log in before continuing.
-              </p>
+              {!isAuthenticated && (
+                <p className="mt-2 text-center text-[10px] text-gray-400">
+                  Bạn cần đăng nhập trước khi tiếp tục đặt sân.
+                </p>
+              )}
             </>
           )}
         </div>

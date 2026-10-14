@@ -9,6 +9,7 @@ import { HomePage } from "@/app/pages/HomePage"
 import { LoginPage } from "@/app/pages/LoginPage"
 import { ProfilePage } from "@/app/pages/ProfilePage"
 import { RegisterPage } from "@/app/pages/RegisterPage"
+import { ForbiddenPage } from "@/app/pages/ForbiddenPage"
 import { ProtectedRoute } from "./ProtectedRoute"
 
 export function AppRouter() {
@@ -22,6 +23,7 @@ export function AppRouter() {
             <Route path="/" element={<HomePage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
+            <Route path="/forbidden" element={<ForbiddenPage />} />
 
             {/* Courts — public browse/search/detail/availability */}
             <Route path="/courts" element={<CourtsPage />} />

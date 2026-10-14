@@ -34,8 +34,8 @@ export function ProtectedRoute({ requiredRole }: ProtectedRouteProps) {
   }
 
   if (requiredRole && user?.role !== requiredRole) {
-    // USER trying to access ADMIN route → back to home
-    return <Navigate to="/" replace />
+    // Role mismatch → redirect to 403 Forbidden page
+    return <Navigate to="/forbidden" replace />
   }
 
   return <Outlet />

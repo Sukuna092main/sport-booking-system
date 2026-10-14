@@ -74,12 +74,12 @@ function CourtCard({
           {court.isActive ? (
             <span className="flex items-center gap-1 rounded-full bg-[#22C55E]/90 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-white backdrop-blur-sm">
               <CheckCircle className="h-3 w-3" />
-              available to book
+              Có thể đặt
             </span>
           ) : (
             <span className="flex items-center gap-1 rounded-full bg-gray-900/75 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-white backdrop-blur-sm">
               <XCircle className="h-3 w-3" />
-              inactive
+              Tạm dừng
             </span>
           )}
         </div>
@@ -99,7 +99,7 @@ function CourtCard({
               court.isActive ? "text-[#16A34A]" : "text-gray-400"
             }`}
           >
-            {court.isActive ? "open" : "closed"}
+            {court.isActive ? "Mở cửa" : "Tạm đóng"}
           </span>
         </div>
 
@@ -132,16 +132,16 @@ function CourtCard({
         {/* Footer */}
         <div className="mt-auto flex items-center justify-between pt-4">
           {court.isActive ? (
-            <span className="text-xs text-[#16A34A]">report now</span>
+            <span className="text-xs font-semibold text-[#16A34A]">Đang hoạt động</span>
           ) : (
-            <span className="text-xs text-gray-400">can't find out</span>
+            <span className="text-xs text-gray-400">Tạm ngừng nhận khách</span>
           )}
           <Link
             to={`/courts/${court.id}`}
             id={`court-card-link-${court.id}`}
             className="flex items-center gap-1 rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-gray-700"
           >
-            View court
+            Xem chi tiết
             <ArrowRight className="h-3 w-3" />
           </Link>
         </div>
@@ -247,20 +247,20 @@ export function CourtsPage() {
       {/* ── Page header ── */}
       <div className="mb-6">
         <p className="text-xs font-bold uppercase tracking-widest text-[#16A34A]">
-          Find your next game
+          Tìm kiếm sân phù hợp
         </p>
         <div className="mt-1 flex items-end justify-between">
           <h1 className="text-4xl font-black uppercase tracking-tight text-gray-900">
-            COURTS
+            DANH SÁCH SÂN
           </h1>
           {!isLoading && (
             <span className="mb-1 rounded-full bg-[#B4FF00] px-3 py-1 text-xs font-bold text-gray-800">
-              {activeCourtsCount} active courts
+              {activeCourtsCount} sân hoạt động
             </span>
           )}
         </div>
         <p className="mt-1 text-sm text-gray-500">
-          Browse active courts and find a time that works for you.
+          Tra cứu danh sách sân thể thao và lựa chọn thời gian phù hợp.
         </p>
       </div>
 
@@ -274,7 +274,7 @@ export function CourtsPage() {
             type="search"
             value={search}
             onChange={(e) => handleSearchChange(e.target.value)}
-            placeholder="Search by court, sport, or facility..."
+            placeholder="Tìm kiếm theo tên sân, môn thể thao, mã sân..."
             className="block w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-4 text-sm text-gray-800 placeholder:text-gray-400 focus:border-[#16A34A] focus:outline-none focus:ring-2 focus:ring-[#16A34A]/20 shadow-sm"
           />
         </div>
@@ -290,7 +290,7 @@ export function CourtsPage() {
               disabled={stLoading}
               className="appearance-none rounded-xl border border-gray-200 bg-white py-2.5 pl-8 pr-7 text-sm text-gray-700 focus:border-[#16A34A] focus:outline-none focus:ring-2 focus:ring-[#16A34A]/20 shadow-sm disabled:opacity-50 cursor-pointer"
             >
-              <option value="">All courts</option>
+              <option value="">Tất cả môn thể thao</option>
               {(sportTypes ?? []).map((st) => (
                 <option key={st.id} value={st.id}>
                   {st.name}
