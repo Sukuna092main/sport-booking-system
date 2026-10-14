@@ -115,7 +115,7 @@ export function CourtDetailPage() {
           className="mb-6 flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-900 transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />
-          Back to courts
+          Quay lại danh sách sân
         </button>
         <div
           role="alert"
@@ -159,7 +159,7 @@ export function CourtDetailPage() {
         className="mb-5 flex w-fit items-center gap-1.5 text-sm text-gray-500 hover:text-gray-900 transition-colors"
       >
         <ArrowLeft className="h-3.5 w-3.5" />
-        Back to courts
+        Quay lại danh sách sân
       </Link>
 
       {/* ── Two-column layout ── */}
@@ -181,12 +181,12 @@ export function CourtDetailPage() {
             {court.isActive ? (
               <span className="flex items-center gap-1.5 rounded-full bg-[#22C55E]/90 px-3 py-1.5 text-xs font-bold text-white backdrop-blur-sm">
                 <CheckCircle className="h-3.5 w-3.5" />
-                active court
+                Đang hoạt động
               </span>
             ) : (
               <span className="flex items-center gap-1.5 rounded-full bg-gray-900/75 px-3 py-1.5 text-xs font-bold text-white backdrop-blur-sm">
                 <XCircle className="h-3.5 w-3.5" />
-                inactive court
+                Tạm ngừng hoạt động
               </span>
             )}
           </div>
@@ -231,20 +231,20 @@ export function CourtDetailPage() {
             <div className="flex items-center gap-2">
               <Clock className="h-4 w-4 text-gray-400 shrink-0" />
               <InfoRow
-                label="Slot"
+                label="Thời lượng"
                 value={`${slotHours > 1 ? `${slotHours} giờ` : `${court.slotDurationMinutes} phút`}`}
               />
             </div>
             <div className="flex items-center gap-2">
               <Tag className="h-4 w-4 text-gray-400 shrink-0" />
-              <InfoRow label="Indoor" value={priceDisplay ?? "Premium only"} />
+              <InfoRow label="Giá giờ chơi" value={priceDisplay ?? "Liên hệ"} />
             </div>
             <InfoRow
-              label="Min slots"
+              label="Tối thiểu"
               value={`${court.minConsecutiveSlots} slot`}
             />
             <InfoRow
-              label="Max slots"
+              label="Tối đa"
               value={`${court.maxConsecutiveSlots} slots`}
             />
           </div>
@@ -267,7 +267,7 @@ export function CourtDetailPage() {
               >
                 <div className="flex items-center gap-2">
                   <CalendarDays className="h-4 w-4" />
-                  Check Availability
+                  Xem lịch trống & đặt giờ
                 </div>
                 <ArrowLeft className="h-4 w-4 rotate-180" />
               </Link>

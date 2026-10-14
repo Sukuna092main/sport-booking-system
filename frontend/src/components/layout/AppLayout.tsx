@@ -61,19 +61,31 @@ export function AppLayout() {
                   : "text-gray-500 hover:text-gray-900"
               }`}
             >
-              Courts
+              Danh sách sân
             </Link>
             {isAuthenticated && (
-              <Link
-                to="/profile"
-                className={`pb-0.5 transition-colors ${
-                  location.pathname === "/profile"
-                    ? "border-b-2 border-gray-900 font-semibold text-gray-900"
-                    : "text-gray-500 hover:text-gray-900"
-                }`}
-              >
-                Profile
-              </Link>
+              <>
+                <Link
+                  to="/bookings"
+                  className={`pb-0.5 transition-colors ${
+                    location.pathname === "/bookings"
+                      ? "border-b-2 border-gray-900 font-semibold text-gray-900"
+                      : "text-gray-500 hover:text-gray-900"
+                  }`}
+                >
+                  Đặt chỗ của tôi
+                </Link>
+                <Link
+                  to="/profile"
+                  className={`pb-0.5 transition-colors ${
+                    location.pathname === "/profile"
+                      ? "border-b-2 border-gray-900 font-semibold text-gray-900"
+                      : "text-gray-500 hover:text-gray-900"
+                  }`}
+                >
+                  Hồ sơ
+                </Link>
+              </>
             )}
           </nav>
 
