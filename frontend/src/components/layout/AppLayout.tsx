@@ -52,10 +52,28 @@ export function AppLayout() {
           <BrandLogo />
 
           {/* Nav */}
-          <nav className="hidden items-center gap-6 text-sm font-medium text-gray-500 sm:flex">
-            <Link to="/courts" className="transition-colors hover:text-gray-900">Sân thể thao</Link>
+          <nav className="hidden items-center gap-6 text-sm font-medium sm:flex">
+            <Link
+              to="/courts"
+              className={`pb-0.5 transition-colors ${
+                location.pathname.startsWith("/courts")
+                  ? "border-b-2 border-gray-900 font-semibold text-gray-900"
+                  : "text-gray-500 hover:text-gray-900"
+              }`}
+            >
+              Courts
+            </Link>
             {isAuthenticated && (
-              <Link to="/bookings" className="transition-colors hover:text-gray-900">Đặt sân của tôi</Link>
+              <Link
+                to="/profile"
+                className={`pb-0.5 transition-colors ${
+                  location.pathname === "/profile"
+                    ? "border-b-2 border-gray-900 font-semibold text-gray-900"
+                    : "text-gray-500 hover:text-gray-900"
+                }`}
+              >
+                Profile
+              </Link>
             )}
           </nav>
 
