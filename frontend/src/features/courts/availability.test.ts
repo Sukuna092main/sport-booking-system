@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Unit tests for Availability Display & Single-Slot Selection (S2)
  *
  * Checklist:
@@ -7,7 +7,7 @@
  * [x] Khong chon past/blackout/booked — isSelectable() returns false for non-available
  * [x] Payload dung contract — BookingPayload structure matches CreateBookingRequest
  */
-import { describe, expect, it, vi, afterEach } from "vitest"
+import { describe, expect, it } from "vitest"
 
 /* ── Helpers extracted from CourtAvailabilityPage (duplicated for testability) ── */
 
