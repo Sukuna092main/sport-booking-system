@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Sport Booking API
-  version: 0.3.0
+  version: 0.4.0
   description: |
     Hợp đồng API MVP. Xem x-implementation-status của từng operation.
     Các operation có x-implementation-status: planned là hợp đồng để review,
@@ -231,7 +231,14 @@ paths:
       tags: [Bookings]
       summary: Tạo một booking cho một sân, một ngày và các slot liên tiếp
       operationId: createBooking
-      x-implementation-status: planned
+      x-implementation-status: implemented
+      description: |
+        Khóa người dùng rồi sân; kiểm tra lại điều kiện và ghi booking, slot snapshot,
+        audit trong cùng transaction. Chỉ nhận slot hợp lệ theo thứ tự thời gian liên tiếp,
+        trong hôm nay đến +30 ngày lịch; tối đa 3 booking CONFIRMED có slot chưa released
+        với endsAt > hiện tại. Không tính tiền/fee; reference price chỉ để tham khảo.
+        Retry cùng người dùng/khóa/selection trả booking gốc trước khi kiểm tra lại
+        horizon, giới hạn, trạng thái sân hoặc slot, kể cả booking đã hủy.
       security: [{ bearerAuth: [] }]
       parameters:
         - { $ref: '#/components/parameters/IdempotencyKey' }
@@ -264,11 +271,19 @@ paths:
           $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/Unprocessable'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
     get:
       tags: [Bookings]
       summary: Booking của tôi
       operationId: listMyBookings
-      x-implementation-status: planned
+      x-implementation-status: implemented
+      description: |
+        Chỉ lấy customerId từ danh tính đã xác thực. Bao gồm booking quá khứ và đã hủy,
+        snapshot của mọi slot được giữ nguyên dù sân/template đã ngừng hoạt động.
+        Phân trang theo booking; thứ tự createdAt DESC, id DESC; slots theo startsAt.
       security: [{ bearerAuth: [] }]
       parameters:
         - { $ref: '#/components/parameters/Page' }
@@ -285,12 +300,18 @@ paths:
                 $ref: '#/components/schemas/BookingListResponse'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /bookings/{bookingId}:
     get:
       tags: [Bookings]
       summary: Chi tiết booking của tôi
       operationId: getMyBooking
-      x-implementation-status: planned
+      x-implementation-status: implemented
       description: Booking không thuộc người dùng trả 404 để không lộ sự tồn tại.
       security: [{ bearerAuth: [] }]
       parameters:
@@ -306,13 +327,24 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /bookings/{bookingId}/cancel:
     post:
       tags: [Bookings]
       summary: Hủy booking của tôi trước slot đầu tiên
       operationId: cancelMyBooking
-      x-implementation-status: planned
-      description: Không tính phí; booking và slot vẫn giữ trong lịch sử.
+      x-implementation-status: implemented
+      description: |
+        Không cần body, không tính phí. Chỉ chủ sở hữu được hủy khi now < startsAt
+        của slot đầu tiên (snapshot). Ghi CANCELLED, cancelledAt, released_at của
+        tất cả slot và audit trong cùng transaction. Giữ nguyên lịch sử, sân hoặc
+        template inactive vẫn hủy được. Booking của người khác trả 404.
+        Gọi lại sau khi đã hủy trả 409 already_cancelled; tại/sau start trả 409 cancellation_closed.
       security: [{ bearerAuth: [] }]
       parameters:
         - { $ref: '#/components/parameters/BookingId' }
@@ -329,6 +361,14 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /admin/sport-types:
     get:
       tags: [Admin]
@@ -785,7 +825,14 @@ components:
       name: Idempotency-Key
       in: header
       required: true
-      description: Chuỗi opaque 1–128 ký tự, duy nhất theo người dùng; cùng khóa và nội dung trả booking ban đầu.
+      description: |
+        Một header opaque 1–128 ký tự, không có ký tự điều khiển, không trim/case-fold,
+        phạm vi theo người dùng. Giữ suốt vòng đời bản ghi booking, không hết hạn theo TTL.
+        Cùng khóa và cùng courtId/bookingDate/tập timeSlotIds trả booking gốc (200);
+        khác nội dung trả 409 idempotency_conflict. UUID được chuẩn hóa chữ thường;
+        thứ tự JSON/array không đổi selection khi retry. Booking mới yêu cầu array
+        theo thứ tự thời gian. Lỗi rollback chưa tạo bản ghi không giữ khóa;
+        nếu mất response/không rõ commit, gửi lại đúng khóa để truy xuất kết quả.
       schema: { type: string, minLength: 1, maxLength: 128 }
   responses:
     InternalError:
@@ -824,7 +871,7 @@ components:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorResponse' }
     ServiceUnavailable:
-      description: Dịch vụ tạm không sẵn sàng (service_unavailable).
+      description: Dịch vụ tạm không sẵn sàng (service_unavailable/retryable_transaction); retry tạo booking phải dùng cùng Idempotency-Key.
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorResponse' }
