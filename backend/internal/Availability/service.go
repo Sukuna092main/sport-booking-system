@@ -64,7 +64,17 @@ func (s *Service) Read(ctx context.Context, id, date string) (Result, error) {
 	if !snapshot.Active {
 		return Result{}, apperror.New(http.StatusNotFound, "not_found", "Không tìm thấy sân đang hoạt động.")
 	}
-	result := Result{CourtID: snapshot.CourtID, Date: date, TimeZone: s.location.String(), Slots: make([]Slot, 0)}
+	return Result{CourtID: snapshot.CourtID, Date: date, TimeZone: s.location.String(), Slots: DatedSlots(snapshot, day, s.location, now)}, nil
+}
+
+// DatedSlots applies the same calendar, operating-hours and exclusion rules to
+// public reads and to a snapshot loaded inside a booking transaction.
+func DatedSlots(snapshot Snapshot, day time.Time, location *time.Location, now time.Time) []Slot {
+	weekday := int(day.Weekday())
+	if weekday == 0 {
+		weekday = 7
+	}
+	slots := make([]Slot, 0)
 	for _, template := range snapshot.Templates {
 		if !template.IsActive || template.Weekday != weekday || snapshot.DurationMinutes <= 0 {
 			continue
@@ -87,22 +97,22 @@ func (s *Service) Read(ctx context.Context, id, date string) (Result, error) {
 		if !inside {
 			continue
 		}
-		start, okStart := localInstant(day, wallStart, s.location)
-		end, okEnd := localInstant(day, wallEnd, s.location)
+		start, okStart := localInstant(day, wallStart, location)
+		end, okEnd := localInstant(day, wallEnd, location)
 		if !okStart || !okEnd || end.Sub(start) != duration {
 			continue
 		}
 		interval := Interval{Start: start, End: end}
-		result.Slots = append(result.Slots, Slot{ID: template.ID, StartsAt: start, EndsAt: end, Available: CanReadAsAvailable(interval, now, snapshot.Blocked)})
+		slots = append(slots, Slot{ID: template.ID, StartsAt: start, EndsAt: end, Available: CanReadAsAvailable(interval, now, snapshot.Blocked)})
 	}
-	sort.Slice(result.Slots, func(i, j int) bool {
-		a, b := result.Slots[i], result.Slots[j]
+	sort.Slice(slots, func(i, j int) bool {
+		a, b := slots[i], slots[j]
 		if a.StartsAt.Equal(b.StartsAt) {
 			return a.ID < b.ID
 		}
 		return a.StartsAt.Before(b.StartsAt)
 	})
-	return result, nil
+	return slots
 }
 
 func clockTime(value string) (time.Duration, bool) {

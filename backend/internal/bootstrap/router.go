@@ -10,6 +10,7 @@ import (
 
 	auth "github.com/Sukuna092main/sport-booking-system/backend/internal/Auth"
 	availability "github.com/Sukuna092main/sport-booking-system/backend/internal/Availability"
+	booking "github.com/Sukuna092main/sport-booking-system/backend/internal/Booking"
 	court "github.com/Sukuna092main/sport-booking-system/backend/internal/Court"
 	health "github.com/Sukuna092main/sport-booking-system/backend/internal/Health"
 	sporttype "github.com/Sukuna092main/sport-booking-system/backend/internal/SportType"
@@ -72,6 +73,12 @@ func newRouter(cfg config.Config, log *slog.Logger, db *sql.DB, now func() time.
 	}
 	availabilityHandler := availability.NewHandler(availability.NewService(availability.NewRepository(db), location, now))
 	v1.GET("/courts/:courtId/availability", availabilityHandler.Read)
+	bookings := booking.NewHandler(booking.NewService(booking.NewRepository(db, location, now)))
+	myBookings := v1.Group("/bookings", auth.Authenticate(users, tokens))
+	myBookings.POST("", bookings.Create)
+	myBookings.GET("", bookings.List)
+	myBookings.GET("/:bookingId", bookings.Detail)
+	myBookings.POST("/:bookingId/cancel", bookings.Cancel)
 	openapi.Register(v1)
 
 	return router
