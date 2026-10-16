@@ -1,0 +1,39 @@
+$kind: http-request
+name: S2 - Availability - Today
+url: http://localhost:8080/api/v1/courts/92000000-0000-4000-8000-000000000001/availability?date=2026-10-16
+method: GET
+queryParams:
+  - key: date
+    value: '2026-10-16'
+body:
+  type: json
+  content: ""
+scripts:
+  - type: afterResponse
+    code: |
+      // Áp dụng khi ngày trên backend là 16/10/2026. Chạy ngày khác: đổi date= cho đúng ngày biên.
+      pm.test("Trả HTTP 200 khi hỏi availability hôm nay", () => {
+        pm.response.to.have.status(200);
+      });
+      const body = pm.response.json();
+      pm.test("Envelope availability đúng sân, ngày, múi giờ sân", () => {
+        pm.expect(body.data.courtId).to.eql("92000000-0000-4000-8000-000000000001");
+        pm.expect(body.data.date).to.eql("2026-10-16");
+        pm.expect(body.data.timeZone).to.eql("Asia/Ho_Chi_Minh");
+      });
+      pm.test("Có sáu slot theo giờ hoạt động 07:00-13:00", () => {
+        pm.expect(body.data.slots).to.be.an("array");
+        pm.expect(body.data.slots).to.have.lengthOf(6);
+      });
+      pm.test("Slots sắp xếp tăng dần, mỗi slot kéo dài 60 phút", () => {
+        const starts = body.data.slots.map(s => new Date(s.startsAt).getTime());
+        pm.expect(starts).to.eql([...starts].sort((a, b) => a - b));
+        body.data.slots.forEach(s => pm.expect(new Date(s.endsAt) - new Date(s.startsAt)).to.eql(3600000));
+      });
+      pm.test("Slot đã bắt đầu phải có available false (gọi sau 13:00 cả sáu slot false)", () => {
+        const now = Date.now();
+        const wrong = body.data.slots.filter(s => s.available !== (new Date(s.startsAt).getTime() > now));
+        pm.expect(wrong).to.eql([]);
+      });
+    language: text/javascript
+order: 4505400000000001
