@@ -1,0 +1,7 @@
+$kind: http-request
+url: '{{baseUrl}}/api/v1/courts?sportTypeId=00000000-0000-0000-0000-000000000000'
+method: GET
+order: 4503630000000000
+queryParams:
+  - key: sportTypeId
+    value: '00000000-0000-0000-0000-000000000000'

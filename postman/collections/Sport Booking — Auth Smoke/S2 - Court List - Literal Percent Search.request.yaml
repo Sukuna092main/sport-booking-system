@@ -1,0 +1,7 @@
+$kind: http-request
+url: '{{baseUrl}}/api/v1/courts?q=100%'
+method: GET
+order: 4503690000000000
+queryParams:
+  - key: q
+    value: '100%'

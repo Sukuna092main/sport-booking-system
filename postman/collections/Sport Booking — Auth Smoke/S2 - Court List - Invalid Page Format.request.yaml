@@ -1,0 +1,7 @@
+$kind: http-request
+url: '{{baseUrl}}/api/v1/courts?page=abc'
+method: GET
+order: 4503660000000000
+queryParams:
+  - key: page
+    value: abc
