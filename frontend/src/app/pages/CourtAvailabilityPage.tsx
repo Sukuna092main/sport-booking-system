@@ -211,10 +211,7 @@ export function CourtAvailabilityPage() {
     )
   }
 
-  /* Split slots into two columns */
   const slots = availability?.slots ?? []
-  const leftSlots = slots.filter((_, i) => i % 2 === 0)
-  const rightSlots = slots.filter((_, i) => i % 2 === 1)
 
   /* Selection info */
   const selectedStart = selectedSlot ? formatSlotTime(selectedSlot.startsAt, timeZone) : null
@@ -358,10 +355,8 @@ export function CourtAvailabilityPage() {
                 <p className="text-sm text-gray-500">Không có slot nào trong ngày này.</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                {/* Left column */}
-                <div className="space-y-2">
-                  {leftSlots.map((slot) => (
+              <div id="availability-slot-grid" className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {slots.map((slot) => (
                     <SlotItem
                       key={slot.id}
                       slot={slot}
@@ -374,23 +369,6 @@ export function CourtAvailabilityPage() {
                       }
                     />
                   ))}
-                </div>
-                {/* Right column */}
-                <div className="space-y-2">
-                  {rightSlots.map((slot) => (
-                    <SlotItem
-                      key={slot.id}
-                      slot={slot}
-                      timeZone={timeZone}
-                      isSelected={selectedSlot?.id === slot.id}
-                      onSelect={() =>
-                        setSelectedSlotId((prev) =>
-                          prev === slot.id ? null : slot.id
-                        )
-                      }
-                    />
-                  ))}
-                </div>
               </div>
             )}
           </div>

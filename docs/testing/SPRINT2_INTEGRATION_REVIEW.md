@@ -33,6 +33,7 @@ Các nhóm browser/HTTP gồm: health; list/search/filter/pagination; inactive/n
 | S2-03 | false tương lai luôn ghi Đã đặt, kể cả blackout. | Nhãn Không khả dụng, không suy diễn booked/blackout từ boolean; slot bị loại không thể chọn. |
 | S2-04 | Selection giữ object cũ; error có thể hiện thêm empty; lỗi tải sân bị gọi là not-found. | Đối chiếu selection với response/court/date/thời điểm mới nhất; error có retry, không giả empty; phân biệt 404 và lỗi tải. Refetch 30 giây trên tab hoạt động. |
 | S2-05 | Dải ngày kéo giãn grid, tràn ngoài viewport. | minmax(0,1fr), min-width 0 và scroll nội bộ; retest hình học/ảnh desktop 1440 và mobile 390px. |
+| S2-06 | Hai cột DOM khiến mobile/keyboard đi thứ tự 07,09,11 rồi 08,10,12. | Một grid theo thứ tự API; mobile và tab order giữ 07,08,09,10,11,12; browser assertion xác nhận. |
 
 Không phát hiện defect backend mới cần sửa: checklist Fix lỗi backend là N/A sau regression, không tạo commit backend giả. DTO/schema giữ theo OpenAPI, không đổi để khớp ví dụ thiết kế.
 
