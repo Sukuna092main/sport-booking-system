@@ -10,18 +10,12 @@ import { useCourtAvailability } from "@/features/courts/useCourts"
 import { useSportTypes } from "@/features/courts/useCourts"
 import { useAuth } from "@/features/auth/useAuth"
 import type { AvailabilitySlot } from "@/types/court.types"
+import {
+  buildDateOptions, courtCalendarDate, DEFAULT_COURT_TIME_ZONE,
+  formatSlotTime, getSlotStatus, selectedAvailableSlot,
+} from "@/features/availability/presentation"
 
 /* ── Helpers ─────────────────────────────────────────────────────── */
-
-/** Format a UTC date-time string to local HH:MM */
-function fmtTime(utcStr: string) {
-  const d = new Date(utcStr)
-  return d.toLocaleTimeString("en-GB", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  })
-}
 
 /** Format YYYY-MM-DD to Vietnamese display */
 function fmtDate(dateStr: string) {
@@ -34,26 +28,6 @@ function fmtDate(dateStr: string) {
   })
 }
 
-/** Get YYYY-MM-DD string for today + offset days */
-function getDateString(offsetDays: number) {
-  const d = new Date()
-  d.setDate(d.getDate() + offsetDays)
-  return d.toISOString().split("T")[0]
-}
-
-/** Build an array of { label, value } for the date picker (today + 29 = 30 days horizon per SRS C-01) */
-function buildDateOptions() {
-  return Array.from({ length: 30 }, (_, i) => {
-    const dateStr = getDateString(i)
-    const [y, m, d] = dateStr.split("-").map(Number)
-    const date = new Date(y, m - 1, d)
-    const weekday = date.toLocaleDateString("vi-VN", { weekday: "short" })
-    const dayNum = date.getDate()
-    const monthAbbr = "T" + (date.getMonth() + 1)
-    return { value: dateStr, weekday, day: dayNum, month: monthAbbr }
-  })
-}
-
 /** Label for current month/year displayed on calendar strip */
 function getMonthYear(dateStr: string) {
   const [y, m, d] = dateStr.split("-").map(Number)
@@ -61,32 +35,21 @@ function getMonthYear(dateStr: string) {
   return `Tháng ${date.getMonth() + 1}, ${date.getFullYear()}`
 }
 
-/* ── Slot status helpers ─────────────────────────────────────────── */
-type SlotStatus = "available" | "booked" | "past" | "blocked"
-
-function getSlotStatus(slot: AvailabilitySlot): SlotStatus {
-  if (!slot.available) {
-    const now = new Date()
-    const starts = new Date(slot.startsAt)
-    if (starts <= now) return "past"
-    return "booked"
-  }
-  return "available"
-}
-
 /* ── Slot item component ─────────────────────────────────────────── */
 function SlotItem({
   slot,
   isSelected,
   onSelect,
+  timeZone,
 }: {
   slot: AvailabilitySlot
   isSelected: boolean
   onSelect: () => void
+  timeZone: string
 }) {
-  const status = getSlotStatus(slot)
-  const startTime = fmtTime(slot.startsAt)
-  const endTime = fmtTime(slot.endsAt)
+  const status = getSlotStatus(slot, new Date())
+  const startTime = formatSlotTime(slot.startsAt, timeZone)
+  const endTime = formatSlotTime(slot.endsAt, timeZone)
   const timeRange = `${startTime} - ${endTime}`
 
   if (status === "past") {
@@ -103,7 +66,7 @@ function SlotItem({
     )
   }
 
-  if (status === "booked") {
+  if (status === "unavailable") {
     return (
       <div className="relative flex items-center justify-between overflow-hidden rounded-xl border border-red-100 bg-red-50/40 px-4 py-3">
         {/* hatching pattern */}
@@ -120,7 +83,7 @@ function SlotItem({
           <span className="font-medium">{timeRange}</span>
         </div>
         <span className="text-[10px] font-semibold uppercase tracking-wide text-red-400">
-          Đã đặt
+          Không khả dụng
         </span>
       </div>
     )
@@ -202,17 +165,22 @@ export function CourtAvailabilityPage() {
   const navigate = useNavigate()
   const { isAuthenticated } = useAuth()
 
-  const dateOptions = buildDateOptions()
-  const [selectedDate, setSelectedDate] = useState(dateOptions[0].value)
-  const [selectedSlot, setSelectedSlot] = useState<AvailabilitySlot | null>(null)
+  const [selectedDate, setSelectedDate] = useState(() => courtCalendarDate(new Date(), DEFAULT_COURT_TIME_ZONE))
+  const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null)
 
-  const { data: court, isLoading: courtLoading } = useCourtById(courtId ?? "")
+  const { data: court, isLoading: courtLoading, error: courtFetchError, refetch: refetchCourt } = useCourtById(courtId ?? "")
   const { data: sportTypes } = useSportTypes()
   const {
     data: availability,
     isLoading: availLoading,
     error: availError,
+    refetch: refetchAvailability,
   } = useCourtAvailability(courtId ?? "", selectedDate)
+  const timeZone = availability?.timeZone ?? DEFAULT_COURT_TIME_ZONE
+  const dateOptions = buildDateOptions(new Date(), timeZone)
+  const selectedSlot = !availError && !availLoading
+    ? selectedAvailableSlot(availability, courtId ?? "", selectedDate, selectedSlotId, new Date())
+    : null
 
   const sportTypeMap = Object.fromEntries(
     (sportTypes ?? []).map((st) => [st.id, st.name])
@@ -234,20 +202,20 @@ export function CourtAvailabilityPage() {
           Back to court
         </button>
         <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-600">
-          Sân không tồn tại.
+          {(courtFetchError as { response?: { status: number } })?.response?.status === 404
+            ? "Sân không tồn tại hoặc đã ngừng hoạt động."
+            : "Không thể tải thông tin sân. Vui lòng thử lại."}
+          <button className="ml-2 underline" onClick={() => refetchCourt()}>Thử lại</button>
         </div>
       </section>
     )
   }
 
-  /* Split slots into two columns */
   const slots = availability?.slots ?? []
-  const leftSlots = slots.filter((_, i) => i % 2 === 0)
-  const rightSlots = slots.filter((_, i) => i % 2 === 1)
 
   /* Selection info */
-  const selectedStart = selectedSlot ? fmtTime(selectedSlot.startsAt) : null
-  const selectedEnd = selectedSlot ? fmtTime(selectedSlot.endsAt) : null
+  const selectedStart = selectedSlot ? formatSlotTime(selectedSlot.startsAt, timeZone) : null
+  const selectedEnd = selectedSlot ? formatSlotTime(selectedSlot.endsAt, timeZone) : null
   const duration = selectedSlot && court
     ? `${court.slotDurationMinutes >= 60
         ? `${court.slotDurationMinutes / 60} hour`
@@ -296,12 +264,12 @@ export function CourtAvailabilityPage() {
       </div>
 
       {/* ── Two-column layout ── */}
-      <div className="mt-5 grid gap-5 lg:grid-cols-[1fr_280px]">
+      <div className="mt-5 grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_280px]">
 
         {/* Left: calendar + time slots */}
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="min-w-0 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
           {/* Date picker strip */}
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
             <div className="flex items-center gap-2 text-sm font-semibold text-gray-800">
               <CalendarDays className="h-4 w-4 text-gray-400" />
               Chọn ngày (30 ngày tới)
@@ -311,7 +279,7 @@ export function CourtAvailabilityPage() {
             </span>
           </div>
 
-          <div className="flex gap-2 overflow-x-auto pb-1">
+          <div className="flex w-full min-w-0 gap-2 overflow-x-auto pb-1">
             {dateOptions.map((opt) => {
               const isActive = opt.value === selectedDate
               return (
@@ -320,7 +288,7 @@ export function CourtAvailabilityPage() {
                   id={`date-${opt.value}`}
                   onClick={() => {
                     setSelectedDate(opt.value)
-                    setSelectedSlot(null)
+                    setSelectedSlotId(null)
                   }}
                   className={`flex min-w-[52px] flex-col items-center rounded-xl px-3 py-3 transition-colors ${
                     isActive
@@ -344,7 +312,7 @@ export function CourtAvailabilityPage() {
 
           {/* Time slots */}
           <div className="mt-5">
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
               <div>
                 <p className="text-sm font-semibold text-gray-800">Chọn khung giờ</p>
                 <p className="text-xs text-gray-400">{fmtDate(selectedDate)}</p>
@@ -357,7 +325,7 @@ export function CourtAvailabilityPage() {
                 </span>
                 <span className="flex items-center gap-1">
                   <span className="h-2 w-2 rounded-full bg-red-400" />
-                  Đã đặt
+                  Không khả dụng
                 </span>
                 <span className="flex items-center gap-1">
                   <span className="h-2 w-2 rounded-full bg-gray-300" />
@@ -371,11 +339,12 @@ export function CourtAvailabilityPage() {
               <div role="alert" className="mb-4 flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-600">
                 <AlertCircle className="h-3.5 w-3.5 shrink-0" />
                 Không thể tải danh sách slot. Vui lòng thử lại.
+                <button className="underline" onClick={() => refetchAvailability()}>Thử lại</button>
               </div>
             )}
 
             {/* Slot grid — 2 columns */}
-            {availLoading ? (
+            {availError ? null : availLoading ? (
               <div className="flex items-center justify-center py-10">
                 <Loader2 className="h-5 w-5 animate-spin text-[#16A34A]" />
                 <span className="ml-2 text-sm text-gray-500">Đang tải slot…</span>
@@ -386,37 +355,20 @@ export function CourtAvailabilityPage() {
                 <p className="text-sm text-gray-500">Không có slot nào trong ngày này.</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                {/* Left column */}
-                <div className="space-y-2">
-                  {leftSlots.map((slot) => (
+              <div id="availability-slot-grid" className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {slots.map((slot) => (
                     <SlotItem
                       key={slot.id}
                       slot={slot}
+                      timeZone={timeZone}
                       isSelected={selectedSlot?.id === slot.id}
                       onSelect={() =>
-                        setSelectedSlot((prev) =>
-                          prev?.id === slot.id ? null : slot
+                        setSelectedSlotId((prev) =>
+                          prev === slot.id ? null : slot.id
                         )
                       }
                     />
                   ))}
-                </div>
-                {/* Right column */}
-                <div className="space-y-2">
-                  {rightSlots.map((slot) => (
-                    <SlotItem
-                      key={slot.id}
-                      slot={slot}
-                      isSelected={selectedSlot?.id === slot.id}
-                      onSelect={() =>
-                        setSelectedSlot((prev) =>
-                          prev?.id === slot.id ? null : slot
-                        )
-                      }
-                    />
-                  ))}
-                </div>
               </div>
             )}
           </div>
