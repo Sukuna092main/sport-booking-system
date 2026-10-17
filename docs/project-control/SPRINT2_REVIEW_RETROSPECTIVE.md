@@ -6,7 +6,7 @@ Ngày lập: **16/10/2026 (UTC+7)**. Sprint: **10–16/10/2026**. Owner: **Huy �
 
 Đã walkthrough/demo kỹ thuật local Court → Detail → Availability và Auth/Profile qua API thật: **12 nhóm HTTP/browser**, **39 frontend test**, **88 backend test/subtest + race** đạt. Xem [báo cáo Integration](../testing/SPRINT2_INTEGRATION_REVIEW.md).
 
-**Chưa đủ nghiệm thu Online:** Huy xác nhận chưa có URL chung; QA card của Hưng đang Working On, chưa có report/sign-off trong nguồn đã đọc. Giữ gate mở và ghi carry-over. Local pass không phải toàn sprint pass.
+**Chốt S2 local ngày 17/10 theo S2-DEC01:** Huy giao quyền tự quyết định kết thúc hai thẻ; trợ lý chốt bằng evidence local đã có, chuyển Online/QA sign-off và đầu vào S3 chưa đủ sang [S3 Integration & QA](https://trello.com/c/3LhVH1Fr). Chưa có URL chung hoặc QA sign-off được xác minh. Đây là thay đổi tiêu chí chốt hai thẻ S2, không phải xác nhận Online Pass hay nghiệm thu toàn dự án.
 
 Đây là bản review kỹ thuật/PM chuẩn bị và thực thi cho Huy. Chưa được cung cấp bằng chứng họp/feedback của Duy/Hưng; không dựng người tham dự, phát biểu, đồng thuận hoặc giờ actual.
 
@@ -38,7 +38,7 @@ Các mapping là kết quả review của Huy, không khẳng định Duy/Hưng 
 
 | ID | Vấn đề / tác động | Owner và hành động |
 | --- | --- | --- |
-| S2-I01 | Chưa có URL dev chung, không kiểm tra deployment/CORS online được; chặn gate. | Hưng chuẩn bị, Duy đối chiếu FE, Huy review. Cần URL + SHA + schema rồi smoke/retest; chưa có ngày hoàn tất được owner xác nhận. |
+| S2-I01 | Chưa có URL dev chung, không kiểm tra deployment/CORS online được; chuyển S3 theo S2-DEC01. | Hưng chuẩn bị, Duy đối chiếu FE, Huy review. Cần URL + SHA + schema rồi smoke/retest; chưa có ngày hoàn tất được owner xác nhận. |
 | S2-I02 | QA S2 chưa có report/sign-off trên card lúc đọc. | Hưng bàn giao QA evidence; lượt tự kiểm tra của Huy không thay chữ ký QA độc lập. |
 | S2-I03 | Ví dụ handoff khác DTO/path thật. | Duy cập nhật, Huy chốt mapping, Hưng xác nhận oracle; theo dõi feedback closure. |
 | S2-I04 | Booking code làm sớm nhưng S2 gate/handoff S3 chưa đóng đủ. | Giữ candidate PR riêng; hoàn thiện handoff/integration/QA trước gate Booking Core. Không sửa lịch sử thành đã đủ đầu vào trước code. |
@@ -70,8 +70,26 @@ Giữ S3 **17–23/10/2026**, gate Booking Core cuối S3; giữ 7 sprint kết 
 
 **DoR verdict:** đã refine và có nền/candidate; chưa xác nhận toàn bộ backlog S3 Ready khi còn các đầu vào nêu trên. Không bỏ gate Booking Core để giữ ngày hạn.
 
-## Checklist và quyết định kết thúc
+## Checklist và quyết định kết thúc — S2-DEC01
 
-Tick theo evidence local và ghi rõ scope. Các mục Online và điều kiện đủ Integration/Ready vẫn mở theo tiêu chí gốc; chưa đánh dấu hai thẻ hoàn thành toàn bộ.
+Ngày **17/10/2026**, Huy giao quyền tự chốt qua tin nhắn “bạn tự chốt đại luôn đi cho xong”. Theo ủy quyền này, trợ lý chốt hai thẻ S2 dựa trên kiểm chứng local; đổi tiêu chí còn thiếu thành chốt local/chuyển tiếp có truy vết, ghi quyết định trên cả hai thẻ và đánh dấu hoàn thành theo phạm vi điều chỉnh.
 
-Nếu Huy chốt dùng local để nghiệm thu S2 và chuyển online/handoff thiếu thành carry-over S3, phải ghi quyết định đổi tiêu chí ngay trên thẻ. Không sửa kết quả online thành Pass. Đây là báo cáo cụ thể để Huy chốt quyết định đó.
+| Tiêu chí trước điều chỉnh | Cách xử lý trong quyết định |
+| --- | --- |
+| QA S2 và handoff FE/API đạt | Local self-check đã có; QA sign-off độc lập/handoff còn thiếu chuyển S3, chưa đạt. |
+| Kiểm tra Court/Availability/Profile qua URL chung | Chốt kết quả chạy API thật tại local; smoke/retest URL chung chuyển S3, chưa kiểm chứng. |
+| Commit/schema/report và review cuối | Chốt local trên SHA eb765f6, schema 00011, OpenAPI 0.3.0, PR #25 và hai báo cáo này; CI frontend/backend đạt trên SHA đó. |
+| Không còn blocker trước Review | Đã triage và sửa/retest các lỗi local; phần chặn Online được chấp nhận chuyển S3, không tuyên bố toàn hệ thống hết blocker. |
+| Integration/evidence đủ trước Review | Đủ cho review local trong phạm vi S2 điều chỉnh; chưa đủ nghiệm thu Online. |
+| Toàn bộ backlog S3 đủ DoR | Chốt hoạt động refinement và danh sách đầu vào còn thiếu; không xác nhận toàn bộ Ready. |
+
+Checklist **Carry-over S2 — S2-DEC01** tại [S3 Integration & QA](https://trello.com/c/3LhVH1Fr) giữ các mục sau chưa tick:
+
+1. URL frontend/API chung, SHA đang deploy, schema và CORS — Hưng/Duy bàn giao, Huy đối chiếu.
+2. Smoke/retest Court/Availability/Profile/Auth online, ghi expected/actual, bug và evidence — Hưng thực thi, Duy/Huy xử lý lỗi theo phần việc.
+3. Report/sign-off QA S2 độc lập, liên kết đúng build/schema và [thẻ QA gốc](https://trello.com/c/gcdUfvcz) — Hưng bàn giao, Huy review.
+4. Đóng feedback [Booking State/Error handoff](https://trello.com/c/u1hZxLTO), chốt expected results và đối chiếu DoR từng task S3 — Duy/Huy/Hưng theo phân công hiện có.
+5. Thu actual/remaining thật, đối chiếu capacity 20h/người/tuần và reforecast phần còn lại — Huy tổng hợp khi từng người báo; không đặt remaining=0.
+6. Theo dõi review/merge PR #25 và phiên bản deploy thực tế trước smoke môi trường chung — Huy điều phối; quyết định này không tự xác nhận merge/deploy.
+
+Không thêm estimate trùng cho các task hiện có. Huy cần đối chiếu remaining khi có dữ liệu trước cam kết gate S3 **23/10/2026**; ngày đó là mốc mục tiêu hiện tại, chưa phải xác nhận cam kết mới của từng owner. Giữ gate Booking Core và hạn dự án 20/11. Quyết định này không phải biên bản họp hoặc chữ ký QA của Duy/Hưng.

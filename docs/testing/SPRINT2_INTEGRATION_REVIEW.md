@@ -2,7 +2,16 @@
 
 Ngày kiểm chứng: **16/10/2026 (UTC+7)**. Owner: **Huy**. [Thẻ Integration](https://trello.com/c/T5SZpxCt).
 
-**Kết luận: local đạt các kiểm tra bên dưới; gate Online chưa đạt.** Huy xác nhận chưa có URL frontend/API chung. Kết quả localhost không phải nghiệm thu online; hai thẻ tiếp tục Working On theo tiêu chí gốc.
+**Kết luận cập nhật 17/10/2026: chốt phạm vi S2 bằng kết quả local đã kiểm chứng, theo quyết định S2-DEC01 bên dưới.** Online chưa được kiểm chứng; công việc còn thiếu được chuyển sang S3 có truy vết.
+
+## Quyết định S2-DEC01 — 17/10/2026
+
+Huy giao quyền tự chốt trong cuộc trao đổi: “bạn tự chốt đại luôn đi cho xong”. Theo ủy quyền đó, trợ lý chốt hai thẻ Integration và Review/Retrospective với phạm vi điều chỉnh: Court → Detail → Availability, Auth/Profile chạy API thật trên local; business rules, migration, regression, UI states và evidence đã được kiểm chứng. Báo cáo kiểm thử ngày 16/10 được giữ nguyên kết quả.
+
+- Bản code được kiểm chứng: `eb765f624dbe239125846aa2f9822f10d46089cf`, base `9691ad5`, [PR #25](https://github.com/Sukuna092main/sport-booking-system/pull/25). CI frontend/backend cho đúng bản code này đạt, kiểm tra lại ngày 17/10. Chốt local không xác nhận PR đã merge hoặc deploy.
+- Chuyển yêu cầu URL chung/smoke online, QA sign-off độc lập và đầu vào Booking S3 chưa Ready sang checklist **Carry-over S2 — S2-DEC01** tại [S3 Integration & QA](https://trello.com/c/3LhVH1Fr). Các mục này vẫn chưa thực hiện/nghiệm thu và để chưa tick ở S3.
+- Mục checklist S2 được đổi tên để thể hiện việc đã chốt local hoặc đã chuyển việc sang S3; tick ở S2 không có nghĩa Online Pass hoặc toàn bộ backlog S3 Ready.
+- Chấp nhận rủi ro còn chưa kiểm chứng deployment/CORS online và chưa có QA sign-off độc lập. Giữ gate Booking Core cuối S3 (23/10), lịch 7 sprint đến 20/11; không miễn điều kiện nghiệm thu sản phẩm cuối kỳ.
 
 ## Phiên bản và môi trường
 
@@ -63,6 +72,8 @@ Lượt kiểm tra do trợ lý thực thi cho Huy. Tên Duy/Hưng trên checkli
 
 1. Hưng/Duy bàn giao URL frontend/API chung, SHA đang deploy, schema/migration và CORS (không gửi secret).
 2. Test/retest Court/Availability/Profile/Auth qua các URL đó, lưu evidence thật và triage blocker.
-3. Liên kết QA report/sign-off tại [QA S2](https://trello.com/c/gcdUfvcz), đối chiếu checklist Online trước Done.
+3. Liên kết QA report/sign-off tại [QA S2](https://trello.com/c/gcdUfvcz), đối chiếu expected/actual và phiên bản trước chốt carry-over Online ở S3.
+
+Các điều kiện trên được quản lý tại [S3 Integration & QA](https://trello.com/c/3LhVH1Fr), chưa tick. Giữ task QA riêng của Hưng theo trạng thái thực tế; quyết định S2-DEC01 chỉ đóng hai thẻ được Huy giao và điều chỉnh tiêu chí tại các thẻ đó.
 
 Chưa ghi actual hours, remaining=0 hoặc nghiệm thu online giả; không đổi deadline để che gate thiếu đầu vào.
