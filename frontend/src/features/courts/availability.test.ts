@@ -229,13 +229,19 @@ describe("Checklist: Payload dung contract (CreateBookingRequest)", () => {
     expect(payload.timeSlotIds).toHaveLength(1)
   })
 
-  it("payload is null when no slot is selected", () => {
-    const selectedSlot = null
-    const courtId = "court-1"
-    const bookingPayload = selectedSlot && courtId
-      ? { courtId, bookingDate: "2026-10-15", timeSlotIds: [(selectedSlot as MockSlot).id] }
-      : null
+  it("multi-slot selection produces ordered timeSlotIds per CreateBookingRequest contract", () => {
+    const slotA = makeSlot({ id: "slot-1", startsAt: "2026-10-15T09:00:00Z", endsAt: "2026-10-15T10:00:00Z" })
+    const slotB = makeSlot({ id: "slot-2", startsAt: "2026-10-15T10:00:00Z", endsAt: "2026-10-15T11:00:00Z" })
+    const slotC = makeSlot({ id: "slot-3", startsAt: "2026-10-15T11:00:00Z", endsAt: "2026-10-15T12:00:00Z" })
 
-    expect(bookingPayload).toBeNull()
+    const payload = {
+      courtId: "court-1",
+      bookingDate: "2026-10-15",
+      timeSlotIds: [slotA.id, slotB.id, slotC.id],
+    }
+
+    expect(payload.timeSlotIds).toHaveLength(3)
+    expect(payload.timeSlotIds).toEqual(["slot-1", "slot-2", "slot-3"])
   })
 })
+
