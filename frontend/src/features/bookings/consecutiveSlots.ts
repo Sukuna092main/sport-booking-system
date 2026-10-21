@@ -227,6 +227,124 @@ export function validateSlotSelection(
   return { isValid: true, error: null }
 }
 
+/**
+ * Validate booking review data including date horizon and past slots
+ */
+export function validateBookingReview(
+  bookingDate: string,
+  slots: Array<{ id: string; startsAt: string; endsAt: string }>,
+  constraints: CourtSlotConstraints = {},
+  now = new Date()
+): { isValid: boolean; error: string | null } {
+  const minSlots = constraints.minConsecutiveSlots ?? 1
+  const maxSlots = constraints.maxConsecutiveSlots ?? 4
+
+  if (!bookingDate) {
+    return { isValid: false, error: "Ngày đặt sân không hợp lệ." }
+  }
+
+  // Horizon check: max 30 days from today (today + 29 days)
+  const [y, m, d] = bookingDate.split("-").map(Number)
+  const targetDate = new Date(y, m - 1, d)
+  const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const diffTime = targetDate.getTime() - todayMidnight.getTime()
+  const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24))
+
+  if (diffDays < 0) {
+    return { isValid: false, error: "Không thể đặt sân cho ngày trong quá khứ." }
+  }
+
+  if (diffDays >= 30) {
+    return {
+      isValid: false,
+      error: "Ngày đặt sân vượt quá phạm vi 30 ngày cho phép (BOOKING_HORIZON_EXCEEDED).",
+    }
+  }
+
+  if (!slots || slots.length === 0) {
+    return { isValid: false, error: "Vui lòng chọn ít nhất một khung giờ." }
+  }
+
+  if (slots.length < minSlots) {
+    return {
+      isValid: false,
+      error: `Số lượng slot tối thiểu là ${minSlots} slot liên tiếp.`,
+    }
+  }
+
+  if (slots.length > maxSlots) {
+    return {
+      isValid: false,
+      error: `Số lượng slot tối đa là ${maxSlots} slot liên tiếp.`,
+    }
+  }
+
+  // Check if any slot is in the past
+  for (const s of slots) {
+    if (new Date(s.startsAt).getTime() <= now.getTime()) {
+      return {
+        isValid: false,
+        error: "Một hoặc nhiều khung giờ đã bắt đầu hoặc đã qua thời điểm hiện tại.",
+      }
+    }
+  }
+
+  // Check consecutive slots
+  const sorted = [...slots].sort(
+    (a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime()
+  )
+
+  for (let i = 0; i < sorted.length - 1; i++) {
+    const currentEnd = new Date(sorted[i].endsAt).getTime()
+    const nextStart = new Date(sorted[i + 1].startsAt).getTime()
+    if (currentEnd !== nextStart) {
+      return {
+        isValid: false,
+        error: "Các khung giờ đã chọn phải liên tiếp nhau, không có khoảng trống.",
+      }
+    }
+  }
+
+  return { isValid: true, error: null }
+}
+
+/**
+ * Format reference price for display per OpenAPI / SRS (display only, no MVP payment)
+ */
+export function formatReferencePrice(
+  amount: string | number | null | undefined,
+  currency?: string | null,
+  slotCount = 1
+): { unitText: string; totalText: string; isConfigured: boolean } {
+  const curr = currency || "VND"
+  if (amount === null || amount === undefined || amount === "") {
+    return {
+      unitText: "Chưa cấu hình",
+      totalText: "Miễn phí tham chiếu (MVP)",
+      isConfigured: false,
+    }
+  }
+
+  const num = Number(amount)
+  if (isNaN(num) || num <= 0) {
+    return {
+      unitText: "Chưa cấu hình",
+      totalText: "Miễn phí tham chiếu (MVP)",
+      isConfigured: false,
+    }
+  }
+
+  const unitFormatted = `${num.toLocaleString("vi-VN")} ${curr}`
+  const totalFormatted = `${(num * Math.max(1, slotCount)).toLocaleString("vi-VN")} ${curr}`
+
+  return {
+    unitText: `${unitFormatted} / slot`,
+    totalText: totalFormatted,
+    isConfigured: true,
+  }
+}
+
+
 /** Format UTC date-time string to local HH:MM */
 export function fmtTime(utcStr: string): string {
   const d = new Date(utcStr)
