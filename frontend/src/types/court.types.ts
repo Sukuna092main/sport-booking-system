@@ -59,6 +59,7 @@ export interface AvailabilitySlot {
   startsAt: string   // UTC ISO date-time
   endsAt: string     // UTC ISO date-time
   available: boolean
+  status?: "available" | "unavailable" | "past" | "booked" | "blackout"
 }
 
 export interface AvailabilityData {
