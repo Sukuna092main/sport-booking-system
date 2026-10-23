@@ -262,20 +262,10 @@ func (r *SQLRepository) Cancel(ctx context.Context, customerID, id, requestID st
 	if err != nil {
 		return Booking{}, err
 	}
-	now := r.now().UTC().Truncate(time.Microsecond)
-	if status != "CONFIRMED" || !value.Slots[0].StartsAt.After(now) {
-		return Booking{}, apperror.New(409, "cancellation_closed", "Chỉ được hủy trước thời điểm bắt đầu slot đầu tiên.")
-	}
-	if _, err = tx.ExecContext(ctx, `UPDATE bookings SET status='CANCELLED',cancelled_at=$3 WHERE customer_id=$1 AND id=$2`, customerID, id, now); err != nil {
+	value, err = r.cancelLocked(ctx, tx, value, customerID, requestID, nil)
+	if err != nil {
 		return Booking{}, err
 	}
-	if _, err = tx.ExecContext(ctx, `UPDATE booking_slots SET released_at=$2 WHERE booking_id=$1 AND released_at IS NULL`, id, now); err != nil {
-		return Booking{}, err
-	}
-	if err = audit(ctx, tx, customerID, id, "BOOKING_CANCELLED", requestID, `{"previousStatus":"CONFIRMED","status":"CANCELLED"}`, now); err != nil {
-		return Booking{}, err
-	}
-	value.Status, value.CancelledAt = "CANCELLED", &now
 	return value, tx.Commit()
 }
 

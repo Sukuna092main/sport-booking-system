@@ -22,7 +22,7 @@ Base path `/api/v1`. Swagger: `/api/v1/docs`; spec: `/api/v1/openapi.yaml`.
 | Chi tiết booking của tôi | GET `/bookings/{bookingId}` | Chủ sở hữu |
 | Hủy booking của tôi | POST `/bookings/{bookingId}/cancel` | Chủ sở hữu, trước slot đầu tiên |
 
-Booking đã triển khai đến Create/History/Detail/Cancel. Admin CRUD còn `planned` trong Swagger. Guard ADMIN đã có và được test, chưa đăng ký route CRUD chưa triển khai. Xem [hợp đồng và hướng dẫn Booking](internal/Booking/README.md).
+Booking và các API Admin đã triển khai: SportType/Court CRUD xóa mềm, lịch/slot, blackout, booking list/detail/cancel có lý do và thống kê. Tất cả route `/api/v1/admin` yêu cầu ADMIN theo role hiện tại trong DB. Xem [hợp đồng và hướng dẫn Booking](internal/Booking/README.md).
 
 ## Chạy backend
 

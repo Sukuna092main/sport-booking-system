@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Sport Booking API
-  version: 0.4.0
+  version: 0.5.0
   description: |
     Hợp đồng API MVP. Xem x-implementation-status của từng operation.
     Các operation có x-implementation-status: planned là hợp đồng để review,
@@ -374,7 +374,7 @@ paths:
       tags: [Admin]
       summary: Danh sách loại thể thao cho quản trị, gồm bản ngừng kích hoạt
       operationId: listAdminSportTypes
-      x-implementation-status: planned
+      x-implementation-status: implemented
       security: [{ bearerAuth: [] }]
       description: Chỉ ADMIN.
       responses:
@@ -395,7 +395,7 @@ paths:
       tags: [Admin]
       summary: Tạo loại thể thao
       operationId: createSportType
-      x-implementation-status: planned
+      x-implementation-status: implemented
       security: [{ bearerAuth: [] }]
       description: Chỉ ADMIN.
       requestBody:
@@ -418,7 +418,7 @@ paths:
       tags: [Admin]
       summary: Sửa hoặc ngừng kích hoạt loại thể thao
       operationId: updateSportType
-      x-implementation-status: planned
+      x-implementation-status: implemented
       security: [{ bearerAuth: [] }]
       description: Chỉ ADMIN. Không xóa bản ghi đã được tham chiếu.
       parameters:
@@ -443,7 +443,7 @@ paths:
       tags: [Admin]
       summary: Ngừng kích hoạt loại thể thao bằng xóa mềm
       operationId: deactivateSportType
-      x-implementation-status: planned
+      x-implementation-status: implemented
       security: [{ bearerAuth: [] }]
       description: Chỉ ADMIN. Đặt isActive=false, giữ bản ghi và lịch sử. Từ chối nếu còn sân đang hoạt động thuộc loại này; gọi lại trên bản đã ngừng kích hoạt vẫn trả 204.
       parameters:
@@ -459,7 +459,7 @@ paths:
       tags: [Admin]
       summary: Danh sách sân cho quản trị, gồm bản ngừng kích hoạt
       operationId: listAdminCourts
-      x-implementation-status: planned
+      x-implementation-status: implemented
       security: [{ bearerAuth: [] }]
       description: Chỉ ADMIN.
       parameters:
@@ -477,7 +477,7 @@ paths:
       tags: [Admin]
       summary: Tạo sân và chính sách slot
       operationId: createCourt
-      x-implementation-status: planned
+      x-implementation-status: implemented
       security: [{ bearerAuth: [] }]
       description: Chỉ ADMIN. Mặc định 60 phút, ít nhất 1 và tối đa 4 slot.
       requestBody:
@@ -500,7 +500,7 @@ paths:
       tags: [Admin]
       summary: Sửa hoặc ngừng kích hoạt sân
       operationId: updateCourt
-      x-implementation-status: planned
+      x-implementation-status: implemented
       security: [{ bearerAuth: [] }]
       description: Chỉ ADMIN. Đổi chính sách slot phải tái tạo mẫu slot hiện hành trong cùng giao dịch.
       parameters:
@@ -525,7 +525,7 @@ paths:
       tags: [Admin]
       summary: Ngừng kích hoạt sân bằng xóa mềm
       operationId: deactivateCourt
-      x-implementation-status: planned
+      x-implementation-status: implemented
       security: [{ bearerAuth: [] }]
       description: Chỉ ADMIN. Đặt isActive=false, không nhận booking mới; booking đã xác nhận và lịch sử vẫn giữ. Gọi lại trên bản đã ngừng kích hoạt vẫn trả 204.
       parameters:
@@ -540,7 +540,7 @@ paths:
       tags: [Admin]
       summary: Xem lịch mở cửa và mẫu slot hiện hành của sân
       operationId: getOperatingHours
-      x-implementation-status: planned
+      x-implementation-status: implemented
       security: [{ bearerAuth: [] }]
       description: Chỉ ADMIN. Giờ theo APP_TIMEZONE của địa điểm, thứ theo ISO 1–7.
       parameters:
@@ -558,7 +558,7 @@ paths:
       tags: [Admin]
       summary: Thay thế lịch mở cửa hằng tuần của sân
       operationId: replaceOperatingHours
-      x-implementation-status: planned
+      x-implementation-status: implemented
       security: [{ bearerAuth: [] }]
       description: Chỉ ADMIN. Tạo lại time_slots cho lịch hiện hành; booking cũ giữ snapshot thời gian.
       parameters:
@@ -590,7 +590,7 @@ paths:
       tags: [Admin]
       summary: Danh sách lịch chặn của sân
       operationId: listCourtBlackouts
-      x-implementation-status: planned
+      x-implementation-status: implemented
       security: [{ bearerAuth: [] }]
       description: Chỉ ADMIN.
       parameters:
@@ -614,7 +614,7 @@ paths:
       tags: [Admin]
       summary: Tạo lịch chặn
       operationId: createCourtBlackout
-      x-implementation-status: planned
+      x-implementation-status: implemented
       security: [{ bearerAuth: [] }]
       description: Chỉ ADMIN. Booking đã xác nhận không bị tự hủy.
       parameters:
@@ -640,7 +640,7 @@ paths:
       tags: [Admin]
       summary: Sửa hoặc ngừng kích hoạt lịch chặn
       operationId: updateCourtBlackout
-      x-implementation-status: planned
+      x-implementation-status: implemented
       security: [{ bearerAuth: [] }]
       parameters:
         - { $ref: '#/components/parameters/CourtId' }
@@ -665,7 +665,7 @@ paths:
       tags: [Admin]
       summary: Tắt lịch chặn bằng xóa mềm
       operationId: deactivateCourtBlackout
-      x-implementation-status: planned
+      x-implementation-status: implemented
       security: [{ bearerAuth: [] }]
       description: Chỉ ADMIN. Đặt isActive=false; giữ lịch sử và audit. Gọi lại trên bản đã tắt vẫn trả 204.
       parameters:
@@ -681,7 +681,7 @@ paths:
       tags: [Admin]
       summary: Tra cứu booking cho quản trị
       operationId: listAdminBookings
-      x-implementation-status: planned
+      x-implementation-status: implemented
       security: [{ bearerAuth: [] }]
       description: Chỉ ADMIN. Quyền sửa trạng thái booking ngoài luồng hủy của chủ sở hữu chưa được SRS định nghĩa.
       parameters:
@@ -710,7 +710,7 @@ paths:
       tags: [Admin]
       summary: Chi tiết booking cho quản trị
       operationId: getAdminBooking
-      x-implementation-status: planned
+      x-implementation-status: implemented
       security: [{ bearerAuth: [] }]
       description: Chỉ ADMIN; dùng để tra cứu và đối chiếu xử lý ngoài hệ thống.
       parameters:
@@ -729,7 +729,7 @@ paths:
       tags: [Admin]
       summary: Admin hủy booking bị ảnh hưởng và ghi lý do
       operationId: cancelAdminBooking
-      x-implementation-status: planned
+      x-implementation-status: implemented
       security: [{ bearerAuth: [] }]
       description: Chỉ ADMIN. Xử lý riêng sau thay đổi lịch hoặc blackout; không tự hủy booking. Chỉ hủy trước slot đầu tiên, giữ booking/slot trong lịch sử và ghi lý do vào audit log.
       parameters:
@@ -755,7 +755,7 @@ paths:
       tags: [Admin]
       summary: Thống kê số booking cơ bản
       operationId: getAdminStatistics
-      x-implementation-status: planned
+      x-implementation-status: implemented
       security: [{ bearerAuth: [] }]
       description: Chỉ ADMIN. Đếm theo bookingDate địa phương, gồm hai biên ngày.
       parameters:

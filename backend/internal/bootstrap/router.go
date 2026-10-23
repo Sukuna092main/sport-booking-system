@@ -6,6 +6,9 @@ import (
 	"net/http"
 	"time"
 
+	adminbookings "github.com/Sukuna092main/sport-booking-system/backend/internal/Admin/bookings"
+	admininventory "github.com/Sukuna092main/sport-booking-system/backend/internal/Admin/inventory"
+	adminschedule "github.com/Sukuna092main/sport-booking-system/backend/internal/Admin/schedule"
 	"github.com/gin-gonic/gin"
 
 	auth "github.com/Sukuna092main/sport-booking-system/backend/internal/Auth"
@@ -79,6 +82,10 @@ func newRouter(cfg config.Config, log *slog.Logger, db *sql.DB, now func() time.
 	myBookings.GET("", bookings.List)
 	myBookings.GET("/:bookingId", bookings.Detail)
 	myBookings.POST("/:bookingId/cancel", bookings.Cancel)
+	admin := v1.Group("/admin", auth.Authenticate(users, tokens), auth.RequireRole("ADMIN"))
+	admininventory.Register(admin, db)
+	adminschedule.RegisterWithTimezone(admin, db, cfg.AppTimezone)
+	adminbookings.Register(admin, db, location, now)
 	openapi.Register(v1)
 
 	return router
