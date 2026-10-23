@@ -1,0 +1,7 @@
+$kind: http-request
+url: '{{baseUrl}}/api/v1/courts?pageSize=101'
+method: GET
+order: 4503650000000000
+queryParams:
+  - key: pageSize
+    value: '101'

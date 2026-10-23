@@ -1,5 +1,3 @@
 # response
 
-DTO/error envelope và HTTP error mapping theo API contract; không lộ stack trace hoặc secret.
-
-Scaffold: chưa có code thực thi.
+`response.go` cung cấp success envelope `{ "data": ... }` và error envelope thống nhất. Mã lỗi nghiệp vụ và DTO cụ thể nằm trong module tương ứng theo [REST contract](../../../../docs/design/api/README.md). Không lộ stack trace hoặc secret.

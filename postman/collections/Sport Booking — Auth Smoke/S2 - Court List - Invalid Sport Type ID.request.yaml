@@ -1,0 +1,7 @@
+$kind: http-request
+url: '{{baseUrl}}/api/v1/courts?sportTypeId=not-a-uuid'
+method: GET
+order: 4503620000000000
+queryParams:
+  - key: sportTypeId
+    value: not-a-uuid

@@ -1,0 +1,27 @@
+$kind: http-request
+name: S2 - Availability - Invalid Court ID
+url: http://localhost:8080/api/v1/courts/invalid-id/availability?date=2026-10-17
+method: GET
+queryParams:
+  - key: date
+    value: '2026-10-17'
+body:
+  type: json
+  content: ""
+scripts:
+  - type: afterResponse
+    code: |
+      // date hợp lệ để lỗi xuất phát đúng từ courtId không phải UUID.
+      pm.test("Trả HTTP 400 khi courtId không phải UUID", () => {
+        pm.response.to.have.status(400);
+      });
+      const body = pm.response.json();
+      pm.test("Lỗi validation_error với chi tiết trường courtId", () => {
+        pm.expect(body.error.code).to.eql("validation_error");
+        pm.expect(body.error.details[0].field).to.eql("courtId");
+      });
+      pm.test("Thông báo yêu cầu UUID hợp lệ", () => {
+        pm.expect(body.error.details[0].message).to.include("UUID hợp lệ");
+      });
+    language: text/javascript
+order: 4505400000000008

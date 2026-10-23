@@ -1,7 +1,5 @@
 # Module nghiệp vụ
 
-Các thư mục module giữ nguyên cách viết tên bạn đang dùng. HTTP → Handler → Service → Repository → PostgreSQL.
+Các module nghiệp vụ theo luồng HTTP → Handler → Service → Repository. `bootstrap` nối phụ thuộc, còn `platform` chứa hạ tầng dùng chung; hai gói này không sở hữu quy tắc nghiệp vụ.
 
-`Availability`, `Audit` và `Admin/statistics` bổ sung các boundary bắt buộc còn thiếu. `Notification` được giữ nhưng là Optional, không phải điều kiện nghiệm thu MVP. Shared infrastructure ở `platform`; wiring ở `bootstrap`.
-
-Không thêm endpoint CRUD độc lập cho BookingSlot chỉ vì có thư mục/entity. Ranh giới API/schema chi tiết cần design review trước khi viết code.
+`Availability`, `Audit` và `Admin/statistics` là các ranh giới cần có. `Notification` vẫn là phần tùy chọn của MVP. Không tạo API CRUD cho BookingSlot chỉ vì có thư mục hoặc thực thể tương ứng. Model, lưu trữ và API Booking sẽ theo contract và schema đã được review. `Health` minh họa cách nối ba lớp mà không tạo schema nghiệp vụ ngoài phạm vi.

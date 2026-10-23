@@ -1,0 +1,29 @@
+$kind: http-request
+url: http://localhost:8080/api/v1/ping
+method: GET
+body:
+  type: json
+  content: ""
+scripts:
+  - type: afterResponse
+    code: "pm.test(\"Ping trả HTTP 200\", () => {\r
+
+      \  pm.response.to.have.status(200);\r
+
+      });\r
+
+      \r
+
+      pm.test(\"API trả thông tin ping\", () => {\r
+
+      \  const body = pm.response.json();\r
+
+      \  pm.expect(body.message).to.eql(\"pong\");\r
+
+      \  pm.expect(body.service).to.be.a(\"string\");\r
+
+      \  pm.expect(body.environment).to.be.a(\"string\");\r
+
+      });"
+    language: text/javascript
+order: 1791384866191

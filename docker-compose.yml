@@ -1,0 +1,54 @@
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: sport
+      POSTGRES_PASSWORD: sport_123
+      POSTGRES_DB: sport_booking
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sport -d sport_booking"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  migrate:
+    image: ghcr.io/kukymbr/goose-docker:3.24.0
+    volumes:
+      - ./backend/migrations:/migrations
+    environment:
+      GOOSE_DRIVER: postgres
+      GOOSE_DBSTRING: "host=db port=5432 user=sport password=sport_123 dbname=sport_booking sslmode=disable"
+    depends_on:
+      db:
+        condition: service_healthy
+    command: goose up
+
+  backend:
+    build: ./backend
+    ports:
+      - "8080:8080"
+    environment:
+      APP_ENV: development
+      APP_TIMEZONE: Asia/Ho_Chi_Minh
+      HTTP_ADDR: ":8080"
+      DATABASE_URL: "postgresql://sport:sport_123@db:5432/sport_booking?sslmode=disable"
+      LOG_LEVEL: debug
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET to at least 32 random bytes}
+      JWT_TTL: 15m
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:

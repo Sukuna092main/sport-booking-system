@@ -1,0 +1,41 @@
+$kind: http-request
+name: Auth / Register
+url: http://localhost:8080/api/v1/auth/register
+method: POST
+body:
+  type: json
+  content: "{\r
+
+    \  \"email\": \"{{userEmail}}\",\r
+
+    \  \"password\": \"{{userPassword}}\",\r
+
+    \  \"fullName\": \"QA User\"\r
+
+    }"
+scripts:
+  - type: afterResponse
+    code: "pm.test(\"Đăng ký trả HTTP 201\", () => {\r
+
+      \  pm.response.to.have.status(201);\r
+
+      });\r
+
+      \r
+
+      pm.test(\"Trả hồ sơ USER, không tự đăng nhập\", () => {\r
+
+      \  const body = pm.response.json();\r
+
+      \  pm.expect(body.data.email).to.eql(pm.environment.get(\"userEmail\"));\r
+
+      \  pm.expect(body.data.role).to.eql(\"USER\");\r
+
+      \  pm.expect(body.data).not.to.have.property(\"accessToken\");\r
+
+      });"
+    language: text/javascript
+  - type: beforeRequest
+    code: ""
+    language: text/javascript
+order: 3120599987167004
