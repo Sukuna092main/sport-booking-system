@@ -1,0 +1,27 @@
+$kind: http-request
+name: S2 - Availability - Invalid Date Format
+url: http://localhost:8080/api/v1/courts/92000000-0000-4000-8000-000000000001/availability?date=17%2F10%2F2026
+method: GET
+queryParams:
+  - key: date
+    value: 17/10/2026
+body:
+  type: json
+  content: ""
+scripts:
+  - type: afterResponse
+    code: |
+      // date=17%2F10%2F2026 là 17/10/2026 → sai định dạng YYYY-MM-DD.
+      pm.test("Trả HTTP 400 khi sai định dạng YYYY-MM-DD", () => {
+        pm.response.to.have.status(400);
+      });
+      const body = pm.response.json();
+      pm.test("Lỗi validation_error với chi tiết trường date", () => {
+        pm.expect(body.error.code).to.eql("validation_error");
+        pm.expect(body.error.details[0].field).to.eql("date");
+      });
+      pm.test("Thông báo yêu cầu định dạng YYYY-MM-DD", () => {
+        pm.expect(body.error.details[0].message).to.include("YYYY-MM-DD");
+      });
+    language: text/javascript
+order: 4505400000000005

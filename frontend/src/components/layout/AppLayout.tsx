@@ -52,40 +52,48 @@ export function AppLayout() {
           <BrandLogo />
 
           {/* Nav */}
-          <nav className="hidden items-center gap-6 text-sm font-medium sm:flex">
+          <nav className="hidden items-center gap-7 text-sm font-semibold sm:flex">
             <Link
               to="/courts"
-              className={`pb-0.5 transition-colors ${
+              className={`pb-1 transition-all ${
                 location.pathname.startsWith("/courts")
-                  ? "border-b-2 border-gray-900 font-semibold text-gray-900"
+                  ? "border-b-2 border-[#16A34A] text-gray-900"
                   : "text-gray-500 hover:text-gray-900"
               }`}
             >
-              Danh sách sân
+              Courts
+            </Link>
+            <Link
+              to="/bookings"
+              className={`pb-1 transition-all ${
+                location.pathname === "/bookings"
+                  ? "border-b-2 border-[#16A34A] text-gray-900"
+                  : "text-gray-500 hover:text-gray-900"
+              }`}
+            >
+              Booking của tôi
+            </Link>
+            <Link
+              to="/bookings/review"
+              className={`pb-1 transition-all ${
+                location.pathname === "/bookings/review"
+                  ? "border-b-2 border-[#16A34A] text-gray-900"
+                  : "text-gray-500 hover:text-gray-900"
+              }`}
+            >
+              Review Handoff
             </Link>
             {isAuthenticated && (
-              <>
-                <Link
-                  to="/bookings"
-                  className={`pb-0.5 transition-colors ${
-                    location.pathname === "/bookings"
-                      ? "border-b-2 border-gray-900 font-semibold text-gray-900"
-                      : "text-gray-500 hover:text-gray-900"
-                  }`}
-                >
-                  Đặt chỗ của tôi
-                </Link>
-                <Link
-                  to="/profile"
-                  className={`pb-0.5 transition-colors ${
-                    location.pathname === "/profile"
-                      ? "border-b-2 border-gray-900 font-semibold text-gray-900"
-                      : "text-gray-500 hover:text-gray-900"
-                  }`}
-                >
-                  Hồ sơ
-                </Link>
-              </>
+              <Link
+                to="/profile"
+                className={`pb-1 transition-all ${
+                  location.pathname === "/profile"
+                    ? "border-b-2 border-[#16A34A] text-gray-900"
+                    : "text-gray-500 hover:text-gray-900"
+                }`}
+              >
+                Profile
+              </Link>
             )}
           </nav>
 
@@ -96,21 +104,29 @@ export function AppLayout() {
             ) : isAuthenticated ? (
               <>
                 <Link
-                  to="/profile"
-                  className="flex items-center gap-2 rounded-full border border-gray-200 bg-gray-50 py-1 pl-1 pr-3 text-sm hover:bg-gray-100 transition-colors"
+                  to="/admin"
+                  className="hidden rounded-xl border border-gray-200 bg-white px-3.5 py-1.5 text-xs font-bold text-gray-800 shadow-xs hover:bg-gray-50 transition-colors sm:inline-block"
                 >
-                  <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[#22C55E] text-[10px] font-bold text-white">
+                  Admin
+                </Link>
+                <Link
+                  to="/profile"
+                  className="flex items-center gap-2.5 rounded-full border border-gray-200 bg-white py-1 pl-1.5 pr-3 text-xs shadow-xs hover:bg-gray-50 transition-colors"
+                >
+                  <div className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-100 text-[11px] font-black text-emerald-800">
                     {initials}
                   </div>
-                  <span className="font-medium text-gray-700">{user?.fullName?.split(" ").pop()}</span>
-                  <span className="text-[10px] uppercase text-gray-400">{user?.role}</span>
+                  <div className="text-left leading-tight">
+                    <p className="font-bold text-gray-800">{user?.email ?? user?.fullName}</p>
+                    <p className="text-[9px] uppercase tracking-wider text-gray-400">{user?.role ?? "User"}</p>
+                  </div>
                 </Link>
                 <button
                   onClick={handleLogout}
-                  className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-900 transition-colors"
+                  className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-gray-900 transition-colors"
                 >
                   <LogOut className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">Đăng xuất</span>
+                  <span className="hidden sm:inline">Log out</span>
                 </button>
               </>
             ) : (

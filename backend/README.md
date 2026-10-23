@@ -26,6 +26,14 @@ Booking đã triển khai đến Create/History/Detail/Cancel. Admin CRUD còn `
 
 ## Chạy backend
 
+Để chạy trên máy với Neon từ cấu hình sẵn trong `backend/.env`, dùng PowerShell tại root repo:
+
+```powershell
+& .\scripts\dev\Start-BackendNeon.ps1
+```
+
+Script kiểm tra đích Neon/TLS, nạp biến môi trường và tạo JWT secret tạm nếu để trống trong development. Giữ Terminal mở; đăng nhập lại sau mỗi lần chạy nếu dùng secret tạm. Xem [hướng dẫn launcher](../scripts/dev/README.md). Không cần bật backend/DB Docker cho chế độ này.
+
 Go 1.25+. Ứng dụng đọc biến môi trường, không tự nạp `.env`. Dùng [`.env.example`](.env.example) làm danh sách cấu hình.
 
 ```powershell

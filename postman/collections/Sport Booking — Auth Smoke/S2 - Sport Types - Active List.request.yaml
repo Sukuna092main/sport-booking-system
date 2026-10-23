@@ -1,0 +1,4 @@
+$kind: http-request
+url: '{{baseUrl}}/api/v1/sport-types'
+method: GET
+order: 4503610000000000
