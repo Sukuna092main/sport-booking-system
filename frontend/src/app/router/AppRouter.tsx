@@ -5,6 +5,7 @@ import { BookingsPage } from "@/app/pages/BookingsPage"
 import { CourtsPage } from "@/app/pages/CourtsPage"
 import { CourtDetailPage } from "@/app/pages/CourtDetailPage"
 import { CourtAvailabilityPage } from "@/app/pages/CourtAvailabilityPage"
+import { BookingReviewPage } from "@/app/pages/BookingReviewPage"
 import { HomePage } from "@/app/pages/HomePage"
 import { LoginPage } from "@/app/pages/LoginPage"
 import { ProfilePage } from "@/app/pages/ProfilePage"
@@ -29,6 +30,9 @@ export function AppRouter() {
             <Route path="/courts" element={<CourtsPage />} />
             <Route path="/courts/:courtId" element={<CourtDetailPage />} />
             <Route path="/courts/:courtId/availability" element={<CourtAvailabilityPage />} />
+
+            {/* Booking review & handoff verification */}
+            <Route path="/bookings/review" element={<BookingReviewPage />} />
 
             {/* USER-protected routes (any authenticated user) */}
             <Route element={<ProtectedRoute />}>

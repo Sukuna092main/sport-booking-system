@@ -2,29 +2,43 @@ import { useState } from "react"
 import { Link, useNavigate, useParams } from "react-router-dom"
 import {
   ArrowLeft, MapPin, Loader2, AlertCircle,
-  Clock, CheckCircle, AlertTriangle,
-  CalendarDays, ArrowRight,
+  Clock, Check, AlertTriangle,
+  CalendarDays, ArrowRight, Info,
 } from "lucide-react"
-import { useCourtById } from "@/features/courts/useCourts"
-import { useCourtAvailability } from "@/features/courts/useCourts"
-import { useSportTypes } from "@/features/courts/useCourts"
+import { useCourtById, useCourtAvailability, useSportTypes } from "@/features/courts/useCourts"
 import { useAuth } from "@/features/auth/useAuth"
 import type { AvailabilitySlot } from "@/types/court.types"
+import type { BookingReviewHandoffData } from "@/features/bookings/types"
 import {
-  buildDateOptions, courtCalendarDate, DEFAULT_COURT_TIME_ZONE,
-  formatSlotTime, getSlotStatus, selectedAvailableSlot,
-} from "@/features/availability/presentation"
+  buildBookingPayload,
+  formatTimeRange,
+  formatTotalDuration,
+  toggleSlotSelection,
+} from "@/features/bookings/consecutiveSlots"
 
-/* ── Helpers ─────────────────────────────────────────────────────── */
+import { buildDateOptions, courtCalendarDate, DEFAULT_COURT_TIME_ZONE, formatSlotTime, getSlotStatus, selectedAvailableSlots } from "@/features/availability/presentation"
 
-/** Format YYYY-MM-DD to Vietnamese display */
-function fmtDate(dateStr: string) {
+/* ── Date Helpers ─────────────────────────────────────────────────── */
+
+/** Format YYYY-MM-DD to English display e.g. "Wed, 14 Oct" */
+function fmtDateShort(dateStr: string) {
   const [y, m, d] = dateStr.split("-").map(Number)
   const date = new Date(y, m - 1, d)
-  return date.toLocaleDateString("vi-VN", {
+  return date.toLocaleDateString("en-US", {
     weekday: "short",
     day: "numeric",
     month: "short",
+  })
+}
+
+/** Format YYYY-MM-DD to "Wed, 14 October" for section header */
+function fmtDateFull(dateStr: string) {
+  const [y, m, d] = dateStr.split("-").map(Number)
+  const date = new Date(y, m - 1, d)
+  return date.toLocaleDateString("en-US", {
+    weekday: "short",
+    day: "numeric",
+    month: "long",
   })
 }
 
@@ -32,7 +46,7 @@ function fmtDate(dateStr: string) {
 function getMonthYear(dateStr: string) {
   const [y, m, d] = dateStr.split("-").map(Number)
   const date = new Date(y, m - 1, d)
-  return `Tháng ${date.getMonth() + 1}, ${date.getFullYear()}`
+  return date.toLocaleDateString("en-US", { month: "long", year: "numeric" })
 }
 
 /* ── Slot item component ─────────────────────────────────────────── */
@@ -41,11 +55,15 @@ function SlotItem({
   isSelected,
   onSelect,
   timeZone,
+  hasTopConnector = false,
+  hasBottomConnector = false,
 }: {
   slot: AvailabilitySlot
   isSelected: boolean
   onSelect: () => void
   timeZone: string
+  hasTopConnector?: boolean
+  hasBottomConnector?: boolean
 }) {
   const status = getSlotStatus(slot, new Date())
   const startTime = formatSlotTime(slot.startsAt, timeZone)
@@ -54,13 +72,13 @@ function SlotItem({
 
   if (status === "past") {
     return (
-      <div className="flex items-center justify-between rounded-xl border border-gray-100 bg-gray-50/50 px-4 py-3 opacity-50">
+      <div className="flex items-center justify-between rounded-xl border border-gray-100 bg-[#F9FAFB] px-4 py-3.5 opacity-60 cursor-not-allowed select-none transition-all">
         <div className="flex items-center gap-2.5 text-sm text-gray-400">
-          <Clock className="h-3.5 w-3.5" />
+          <Clock className="h-3.5 w-3.5 text-gray-400" />
           <span className="font-medium">{timeRange}</span>
         </div>
-        <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">
-          Đã qua
+        <span className="flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+          <span className="text-gray-300">-</span> PAST
         </span>
       </div>
     )
@@ -68,62 +86,96 @@ function SlotItem({
 
   if (status === "unavailable") {
     return (
-      <div className="relative flex items-center justify-between overflow-hidden rounded-xl border border-red-100 bg-red-50/40 px-4 py-3">
-        {/* hatching pattern */}
-        <div
-          className="pointer-events-none absolute inset-0 opacity-10"
-          style={{
-            backgroundImage:
-              "repeating-linear-gradient(-45deg, #ef4444 0, #ef4444 1px, transparent 0, transparent 50%)",
-            backgroundSize: "8px 8px",
-          }}
-        />
-        <div className="flex items-center gap-2.5 text-sm text-red-400">
-          <Clock className="h-3.5 w-3.5" />
+      <div className="flex items-center justify-between rounded-xl border border-rose-100 bg-[#FEF2F2] px-4 py-3.5 cursor-not-allowed select-none transition-all">
+        <div className="flex items-center gap-2.5 text-sm text-rose-500">
+          <Clock className="h-3.5 w-3.5 text-rose-400" />
           <span className="font-medium">{timeRange}</span>
         </div>
-        <span className="text-[10px] font-semibold uppercase tracking-wide text-red-400">
-          Không khả dụng
+        <span className="flex items-center gap-1 rounded-md bg-rose-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-rose-400">
+          <span>-</span> UNAVAILABLE
         </span>
       </div>
     )
   }
 
-  /* available */
   if (isSelected) {
     return (
-      <button
-        id={`slot-${slot.id}`}
-        onClick={onSelect}
-        className="flex items-center justify-between rounded-xl border-2 border-[#22C55E] bg-[#22C55E]/10 px-4 py-3 text-left transition-colors hover:bg-[#22C55E]/15 w-full"
-      >
-        <div className="flex items-center gap-2.5 text-sm text-[#15803D] font-semibold">
-          <Clock className="h-3.5 w-3.5" />
-          <span>{timeRange}</span>
-        </div>
-        <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-[#15803D]">
-          <CheckCircle className="h-3 w-3" />
-          Đã chọn
-        </span>
-      </button>
+      <div className="relative">
+        {/* Subtle connector indicators */}
+        {hasTopConnector && (
+          <div className="absolute -top-2 left-6 z-10 h-2 w-0.5 bg-[#16A34A]" />
+        )}
+        {hasBottomConnector && (
+          <div className="absolute -bottom-2 left-6 z-10 h-2 w-0.5 bg-[#16A34A]" />
+        )}
+
+        <button
+          id={`slot-${slot.id}`}
+          type="button"
+          onClick={onSelect}
+          aria-pressed="true"
+          className="flex items-center justify-between rounded-xl border-2 border-[#16A34A] bg-[#DCFCE7]/70 px-4 py-3.5 text-left transition-all hover:bg-[#DCFCE7] w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#16A34A] shadow-xs"
+        >
+          <div className="flex items-center gap-2.5 text-sm text-[#15803D] font-bold">
+            <Clock className="h-3.5 w-3.5 text-[#16A34A]" />
+            <span>{timeRange}</span>
+          </div>
+          <span className="flex items-center gap-1 rounded-full bg-[#16A34A] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
+            <Check className="h-3 w-3 stroke-[3]" />
+            SELECTED
+          </span>
+        </button>
+      </div>
     )
   }
 
   return (
     <button
       id={`slot-${slot.id}`}
+      type="button"
       onClick={onSelect}
-      className="flex items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3 text-left transition-colors hover:border-[#22C55E]/50 hover:bg-[#22C55E]/5 w-full group"
+      aria-pressed="false"
+      className="flex items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3.5 text-left transition-all hover:border-[#16A34A]/70 hover:bg-emerald-50/20 w-full group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#16A34A] shadow-xs"
     >
       <div className="flex items-center gap-2.5 text-sm text-gray-700 group-hover:text-gray-900">
-        <Clock className="h-3.5 w-3.5 text-gray-400 group-hover:text-[#22C55E]" />
+        <Clock className="h-3.5 w-3.5 text-gray-400 group-hover:text-[#16A34A]" />
         <span className="font-medium">{timeRange}</span>
       </div>
-      <span className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-[#16A34A]">
-        <CheckCircle className="h-3 w-3" />
-        Còn trống
+      <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-[#16A34A]">
+        <span className="h-1.5 w-1.5 rounded-full bg-[#16A34A]" />
+        AVAILABLE
       </span>
     </button>
+  )
+}
+
+/* ── Legend matching Screenshot 1 ────────────────────────────────── */
+function SlotLegend() {
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-gray-500 font-medium">
+      <span className="flex items-center gap-1">
+        <span className="inline-flex h-3.5 w-3.5 items-center justify-center rounded border border-[#16A34A] text-[#16A34A] text-[9px] font-bold">
+          ✓
+        </span>
+        Available
+      </span>
+      <span className="flex items-center gap-1">
+        <span className="inline-block h-0.5 w-2.5 bg-rose-400" />
+        Booked
+      </span>
+      <span className="flex items-center gap-1">
+        <span className="inline-block h-2.5 w-2.5 rounded-xs bg-purple-400" />
+        Blackout
+      </span>
+      <span className="flex items-center gap-1">
+        <span className="inline-block h-0.5 w-2.5 bg-gray-400" />
+        Past
+      </span>
+      <span className="flex items-center gap-1">
+        <span className="inline-block h-0.5 w-2.5 bg-amber-500" />
+        Unavailable
+      </span>
+    </div>
   )
 }
 
@@ -135,7 +187,7 @@ function AvailabilitySkeleton() {
       <div className="h-6 w-20 rounded bg-gray-200 animate-pulse mb-1" />
       <div className="h-9 w-48 rounded bg-gray-200 animate-pulse mb-2" />
       <div className="h-4 w-40 rounded bg-gray-200 animate-pulse mb-6" />
-      <div className="grid gap-6 lg:grid-cols-[1fr_280px]">
+      <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
         <div className="rounded-2xl border border-gray-200 bg-white p-5 space-y-3">
           <div className="h-4 w-32 rounded bg-gray-200 animate-pulse" />
           <div className="flex gap-2 mt-3">
@@ -159,295 +211,342 @@ function AvailabilitySkeleton() {
   )
 }
 
-/* ── Main page ──────────────────────────────────────────────────── */
+/* ── Main CourtAvailabilityPage Component ────────────────────────── */
 export function CourtAvailabilityPage() {
   const { courtId } = useParams<{ courtId: string }>()
   const navigate = useNavigate()
   const { isAuthenticated } = useAuth()
 
   const [selectedDate, setSelectedDate] = useState(() => courtCalendarDate(new Date(), DEFAULT_COURT_TIME_ZONE))
-  const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null)
-
-  const { data: court, isLoading: courtLoading, error: courtFetchError, refetch: refetchCourt } = useCourtById(courtId ?? "")
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [warningMessage, setWarningMessage] = useState<string | null>(null)
+  const { data: court, isLoading: courtLoading } = useCourtById(courtId ?? "")
   const { data: sportTypes } = useSportTypes()
-  const {
-    data: availability,
-    isLoading: availLoading,
-    error: availError,
-    refetch: refetchAvailability,
-  } = useCourtAvailability(courtId ?? "", selectedDate)
+  const { data: availability, isLoading: availLoading, error: availError, refetch: refetchAvailability } = useCourtAvailability(courtId ?? "", selectedDate)
   const timeZone = availability?.timeZone ?? DEFAULT_COURT_TIME_ZONE
   const dateOptions = buildDateOptions(new Date(), timeZone)
-  const selectedSlot = !availError && !availLoading
-    ? selectedAvailableSlot(availability, courtId ?? "", selectedDate, selectedSlotId, new Date())
-    : null
+  const selectedSlots = !availError && !availLoading
+    ? selectedAvailableSlots(availability, courtId ?? "", selectedDate, selectedIds, new Date()) : []
 
   const sportTypeMap = Object.fromEntries(
     (sportTypes ?? []).map((st) => [st.id, st.name])
   )
-  const sportName = court ? (sportTypeMap[court.sportTypeId] ?? "Sport") : ""
+  const sportName = court ? (sportTypeMap[court.sportTypeId] ?? "BADMINTON") : "BADMINTON"
 
-  // availLoading is used directly in JSX below; courtLoading drives the skeleton guard above
   if (courtLoading) return <AvailabilitySkeleton />
 
-  const courtError = !courtLoading && !court
-  if (courtError) {
-    return (
-      <section className="py-4">
-        <button
-          onClick={() => navigate(-1)}
-          className="mb-6 flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-900"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to court
-        </button>
-        <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-600">
-          {(courtFetchError as { response?: { status: number } })?.response?.status === 404
-            ? "Sân không tồn tại hoặc đã ngừng hoạt động."
-            : "Không thể tải thông tin sân. Vui lòng thử lại."}
-          <button className="ml-2 underline" onClick={() => refetchCourt()}>Thử lại</button>
-        </div>
-      </section>
-    )
-  }
 
   const slots = availability?.slots ?? []
 
-  /* Selection info */
-  const selectedStart = selectedSlot ? formatSlotTime(selectedSlot.startsAt, timeZone) : null
-  const selectedEnd = selectedSlot ? formatSlotTime(selectedSlot.endsAt, timeZone) : null
-  const duration = selectedSlot && court
-    ? `${court.slotDurationMinutes >= 60
-        ? `${court.slotDurationMinutes / 60} hour`
-        : `${court.slotDurationMinutes} min`}`
+  /**
+   * Selection handler with Consecutive Multi-Slot constraints.
+   */
+  function handleSlotSelect(slot: AvailabilitySlot) {
+    if (getSlotStatus(slot, new Date()) !== "available" || !availability || availError) return
+
+    const { newSlots, warningMessage: msg } = toggleSlotSelection(
+      selectedSlots,
+      slot,
+      {
+        minConsecutiveSlots: court?.minConsecutiveSlots ?? 1,
+        maxConsecutiveSlots: court?.maxConsecutiveSlots ?? 4,
+      }
+    )
+
+    setSelectedIds(newSlots.map((item) => item.id))
+    setWarningMessage(msg)
+  }
+
+  function handleDateChange(dateValue: string) {
+    setSelectedDate(dateValue)
+    setSelectedIds([])
+    setWarningMessage(null)
+  }
+
+  const timeRangeText = selectedSlots.length ? `${formatSlotTime(selectedSlots[0].startsAt, timeZone)} – ${formatSlotTime(selectedSlots[selectedSlots.length - 1].endsAt, timeZone)}` : formatTimeRange(selectedSlots)
+  const formattedDate = selectedDate ? fmtDateShort(selectedDate) : ""
+  const formattedDateHeader = selectedDate ? fmtDateFull(selectedDate) : ""
+  const durationText = formatTotalDuration(
+    selectedSlots,
+    court?.slotDurationMinutes ?? 60
+  )
+
+  /**
+   * CreateBookingRequest payload (per API contract).
+   */
+  const bookingPayload = courtId
+    ? buildBookingPayload(courtId, selectedDate, selectedSlots)
     : null
 
-  const formattedDate = selectedDate
-    ? fmtDate(selectedDate)
-    : ""
+  function handleContinueBooking() {
+    if (!bookingPayload || selectedSlots.length === 0 || selectedSlots.length !== selectedIds.length || !courtId || availError || availLoading) return
+
+    // Prepare full handoff review data
+    const reviewData: BookingReviewHandoffData = {
+      courtId,
+      courtName: court?.name ?? "Court A",
+      courtCode: court?.code ?? "CRT-A",
+      sportName: sportName.toUpperCase(),
+      sportTypeId: court?.sportTypeId ?? "",
+      locationText: court?.description ?? "Riverside Sports Center · 12 Riverwalk Avenue",
+      bookingDate: selectedDate,
+      formattedDate: `${new Date(selectedDate).toLocaleDateString("vi-VN", {
+        weekday: "long",
+      })}, ${new Date(selectedDate).toLocaleDateString("vi-VN")}`,
+      slotDurationMinutes: court?.slotDurationMinutes ?? 60,
+      minConsecutiveSlots: court?.minConsecutiveSlots ?? 1,
+      maxConsecutiveSlots: court?.maxConsecutiveSlots ?? 4,
+      timeRangeText,
+      durationText,
+      selectedSlots: selectedSlots.map((s) => ({
+        id: s.id,
+        startsAt: s.startsAt,
+        endsAt: s.endsAt,
+        formattedRange: `${formatSlotTime(s.startsAt, timeZone)} - ${formatSlotTime(s.endsAt, timeZone)}`,
+      })),
+      payload: bookingPayload,
+    }
+
+    // Persist payload and review data in sessionStorage
+    sessionStorage.setItem("pending_booking_payload", JSON.stringify(bookingPayload))
+    sessionStorage.setItem("pending_booking_review", JSON.stringify(reviewData))
+
+    if (!isAuthenticated) {
+      navigate("/login")
+      return
+    }
+
+    // Handoff to Booking Review Confirmation page
+    navigate("/bookings/review")
+  }
+
+  const isSlotSelected = (id: string) => selectedSlots.some((s) => s.id === id)
 
   return (
     <section className="py-4">
-      {/* ── Back link ── */}
+      {/* Back link */}
       <Link
         to={`/courts/${courtId}`}
         id="availability-back"
-        className="mb-4 flex w-fit items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-gray-400 hover:text-gray-700 transition-colors"
+        className="mb-4 flex w-fit items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-gray-900 transition-colors"
       >
         <ArrowLeft className="h-3.5 w-3.5" />
-        Quay lại chi tiết sân
+        Back to court
       </Link>
 
-      {/* ── Page heading ── */}
-      <p className="text-[10px] font-bold uppercase tracking-widest text-[#16A34A]">
-        Lịch khả dụng của sân
-      </p>
-      <h1 className="mt-0.5 text-3xl font-black tracking-tight text-gray-900">
-        {court?.name ?? ""}
-      </h1>
-      <div className="mt-2 flex items-center gap-3 text-sm text-gray-500">
-        <div className="flex items-center gap-1.5">
-          <MapPin className="h-3.5 w-3.5 text-gray-400" />
-          <span>{court?.description ?? `Sân mã ${court?.code}`}</span>
-        </div>
-        <span className="text-gray-300">·</span>
-        <div className="flex items-center gap-1 text-gray-400">
-          <MapPin className="h-3 w-3" />
-          <span className="text-xs">{sportName}</span>
-        </div>
-      </div>
-
-      {/* ── Info banner ── */}
-      <div className="mt-4 flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-700">
-        <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-        Vui lòng chọn ngày và khung giờ còn trống để đặt sân.
-      </div>
-
-      {/* ── Two-column layout ── */}
-      <div className="mt-5 grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_280px]">
-
-        {/* Left: calendar + time slots */}
-        <div className="min-w-0 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-          {/* Date picker strip */}
-          <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
-            <div className="flex items-center gap-2 text-sm font-semibold text-gray-800">
-              <CalendarDays className="h-4 w-4 text-gray-400" />
-              Chọn ngày (30 ngày tới)
-            </div>
-            <span className="text-xs font-medium text-gray-400">
-              {getMonthYear(selectedDate)}
+      {/* Header and top info banner */}
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-[#16A34A]">
+            COURT AVAILABILITY
+          </p>
+          <h1 className="mt-0.5 text-3xl font-black tracking-tight text-gray-900">
+            {court?.name ?? "Court A"}
+          </h1>
+          <div className="mt-1.5 flex items-center gap-1.5 text-xs text-gray-400">
+            <MapPin className="h-3.5 w-3.5 text-gray-400 shrink-0" />
+            <span>
+              {court?.description ?? "Riverside Sports Center · 12 Riverwalk Avenue"}
             </span>
           </div>
+        </div>
 
-          <div className="flex w-full min-w-0 gap-2 overflow-x-auto pb-1">
-            {dateOptions.map((opt) => {
-              const isActive = opt.value === selectedDate
-              return (
-                <button
-                  key={opt.value}
-                  id={`date-${opt.value}`}
-                  onClick={() => {
-                    setSelectedDate(opt.value)
-                    setSelectedSlotId(null)
-                  }}
-                  className={`flex min-w-[52px] flex-col items-center rounded-xl px-3 py-3 transition-colors ${
-                    isActive
-                      ? "bg-gray-900 text-white shadow-sm"
-                      : "bg-gray-50 text-gray-600 hover:bg-gray-100"
-                  }`}
-                >
-                  <span className={`text-[10px] font-semibold ${isActive ? "text-gray-300" : "text-gray-400"}`}>
-                    {opt.weekday}
-                  </span>
-                  <span className={`text-lg font-black leading-tight ${isActive ? "text-white" : "text-gray-800"}`}>
-                    {opt.day}
-                  </span>
-                  <span className={`text-[9px] font-semibold ${isActive ? "text-gray-400" : "text-gray-400"}`}>
-                    {opt.month}
-                  </span>
-                </button>
-              )
-            })}
-          </div>
+        {/* Top Info Banner matching Screenshot 1 */}
+        <div className="flex items-center gap-2 rounded-xl border border-gray-200/80 bg-white/90 px-3.5 py-2 text-xs font-medium text-gray-600 shadow-xs">
+          <Info className="h-4 w-4 text-gray-400 shrink-0" />
+          <span>Select one or more consecutive available slots.</span>
+        </div>
+      </div>
 
-          {/* Time slots */}
-          <div className="mt-5">
-            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-              <div>
-                <p className="text-sm font-semibold text-gray-800">Chọn khung giờ</p>
-                <p className="text-xs text-gray-400">{fmtDate(selectedDate)}</p>
+      {/* Main layout: 2 Columns */}
+      <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_300px]">
+        {/* Left Column: Calendar & Time Slots */}
+        <div className="space-y-5">
+          {/* Calendar Date Strip Card */}
+          <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-xs">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2 text-sm font-bold text-gray-900">
+                <CalendarDays className="h-4 w-4 text-[#16A34A]" />
+                Select a date
               </div>
-              {/* Legend */}
-              <div className="flex items-center gap-3 text-[10px] text-gray-400">
-                <span className="flex items-center gap-1">
-                  <span className="h-2 w-2 rounded-full bg-[#22C55E]" />
-                  Còn trống
-                </span>
-                <span className="flex items-center gap-1">
-                  <span className="h-2 w-2 rounded-full bg-red-400" />
-                  Không khả dụng
-                </span>
-                <span className="flex items-center gap-1">
-                  <span className="h-2 w-2 rounded-full bg-gray-300" />
-                  Đã qua
-                </span>
-              </div>
+              <span className="text-xs font-semibold text-gray-400">
+                {getMonthYear(selectedDate)}
+              </span>
             </div>
 
-            {/* Slot error */}
-            {availError && (
-              <div role="alert" className="mb-4 flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-600">
-                <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-                Không thể tải danh sách slot. Vui lòng thử lại.
-                <button className="underline" onClick={() => refetchAvailability()}>Thử lại</button>
+            <div className="flex gap-2.5 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none">
+              {dateOptions.map((opt) => {
+                const isActive = opt.value === selectedDate
+                return (
+                  <button
+                    key={opt.value}
+                    id={`date-${opt.value}`}
+                    type="button"
+                    onClick={() => handleDateChange(opt.value)}
+                    aria-pressed={isActive}
+                    className={`flex min-w-[62px] flex-col items-center rounded-xl px-2.5 py-3 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#16A34A] ${
+                      isActive
+                        ? "bg-[#0D3B2E] text-white shadow-sm ring-1 ring-[#0D3B2E]"
+                        : "border border-gray-100 bg-gray-50/70 text-gray-600 hover:bg-gray-100/80"
+                    }`}
+                  >
+                    <span className={`text-[10px] font-bold tracking-wider ${isActive ? "text-emerald-300" : "text-gray-400"}`}>
+                      {opt.weekday}
+                    </span>
+                    <span className={`text-lg font-black leading-tight my-0.5 ${isActive ? "text-white" : "text-gray-800"}`}>
+                      {opt.day}
+                    </span>
+                    <span className={`text-[9px] font-semibold ${isActive ? "text-gray-300" : "text-gray-400"}`}>
+                      {opt.month}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Time Slots Card */}
+          <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-xs">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-4 pb-3 border-b border-gray-100">
+              <div>
+                <p className="text-sm font-bold text-gray-900">Choose a time</p>
+                <p className="text-xs text-gray-400 mt-0.5">{formattedDateHeader}</p>
+              </div>
+              <SlotLegend />
+            </div>
+
+            {/* Invalid Selection Alert Banner matching Screenshots 3 & 4 */}
+            {warningMessage && (
+              <div
+                role="alert"
+                className="mb-4 flex items-center justify-between rounded-xl border border-amber-200 bg-[#FFFBEB] px-4 py-3 text-xs text-[#B45309] animate-in fade-in"
+              >
+                <div className="flex items-center gap-2.5">
+                  <AlertTriangle className="h-4 w-4 shrink-0 text-[#D97706]" />
+                  <span className="font-semibold">{warningMessage}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setWarningMessage(null)}
+                  className="text-amber-600 hover:text-amber-800 font-bold ml-2 text-sm"
+                  aria-label="Dismiss alert"
+                >
+                  ×
+                </button>
               </div>
             )}
 
-            {/* Slot grid — 2 columns */}
+            {/* Slot Fetch Error */}
+            {availError && (
+              <div
+                role="alert"
+                className="mb-4 flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-600"
+              >
+                <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                Không thể tải danh sách slot. Vui lòng thử lại. <button className="underline" onClick={() => refetchAvailability()}>Thử lại</button>
+              </div>
+            )}
+
+            {/* Slot Grid (2 Columns) */}
             {availError ? null : availLoading ? (
-              <div className="flex items-center justify-center py-10">
-                <Loader2 className="h-5 w-5 animate-spin text-[#16A34A]" />
-                <span className="ml-2 text-sm text-gray-500">Đang tải slot…</span>
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-6 w-6 animate-spin text-[#16A34A]" />
+                <span className="ml-2 text-sm text-gray-500 font-medium">Đang tải khung giờ…</span>
               </div>
             ) : slots.length === 0 ? (
-              <div className="py-10 text-center">
+              <div className="py-12 text-center">
                 <Clock className="mx-auto mb-2 h-8 w-8 text-gray-300" />
-                <p className="text-sm text-gray-500">Không có slot nào trong ngày này.</p>
+                <p className="text-sm font-semibold text-gray-600">Không có khung giờ nào trong ngày này.</p>
+                <p className="mt-1 text-xs text-gray-400">Sân có thể không mở cửa vào ngày này.</p>
               </div>
             ) : (
-              <div id="availability-slot-grid" className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  {slots.map((slot) => (
-                    <SlotItem
-                      key={slot.id}
-                      slot={slot}
-                      timeZone={timeZone}
-                      isSelected={selectedSlot?.id === slot.id}
-                      onSelect={() =>
-                        setSelectedSlotId((prev) =>
-                          prev === slot.id ? null : slot.id
-                        )
-                      }
-                    />
-                  ))}
+              <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                {slots.map((slot) => (
+                  <SlotItem key={slot.id} slot={slot} timeZone={timeZone}
+                    isSelected={isSlotSelected(slot.id)} onSelect={() => handleSlotSelect(slot)} />
+                ))}
               </div>
             )}
           </div>
         </div>
 
-        {/* Right: selection summary */}
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-3">
-            Thông tin đã chọn
+        {/* Right Column: Selection Summary Sidebar */}
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-xs h-fit">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-[#16A34A] mb-2">
+            YOUR SELECTION
           </p>
 
-          {selectedSlot ? (
+          {selectedSlots.length > 0 && selectedSlots.length === selectedIds.length ? (
             <>
-              <p className="text-2xl font-black text-gray-900">
-                {selectedStart} – {selectedEnd}
-              </p>
+              <h2 className="text-2xl font-black text-gray-900 tracking-tight">
+                {timeRangeText}
+              </h2>
 
-              <div className="mt-4 space-y-2.5">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-500">Sân</span>
-                  <span className="font-semibold text-gray-800">{court?.name}</span>
+              <div className="mt-5 space-y-3 rounded-xl bg-gray-50/80 p-3.5 border border-gray-100">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-gray-400 font-medium">Court</span>
+                  <span className="font-bold text-gray-800 truncate max-w-[150px]">
+                    {court?.name}
+                  </span>
                 </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-500">Ngày</span>
-                  <span className="font-semibold text-gray-800">{formattedDate}</span>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-gray-400 font-medium">Date</span>
+                  <span className="font-bold text-gray-800">{formattedDate}</span>
                 </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-500">Thời lượng</span>
-                  <span className="font-semibold text-gray-800">{duration}</span>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-gray-400 font-medium">Duration</span>
+                  <span className="font-bold text-gray-800">{durationText}</span>
                 </div>
               </div>
 
-              {/* Continue booking CTA */}
+              {/* Continue Booking CTA */}
               <button
                 id="availability-continue-booking"
-                className="mt-6 flex w-full items-center justify-between rounded-xl bg-[#B4FF00] px-5 py-3.5 text-sm font-bold text-gray-900 transition-colors hover:bg-[#AAEF00]"
-                onClick={() => {
-                  // Booking is planned (Sprint 3)
-                  navigate(`/courts/${courtId}`)
-                }}
+                type="button"
+                onClick={handleContinueBooking}
+                className="mt-5 flex w-full items-center justify-between rounded-xl bg-[#B4FF00] px-5 py-3.5 text-sm font-black text-gray-900 transition-all hover:bg-[#AAEF00] active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#16A34A] shadow-xs"
               >
-                Tiếp tục đặt sân
-                <ArrowRight className="h-4 w-4" />
+                Continue Booking
+                <ArrowRight className="h-4 w-4 stroke-[2.5]" />
               </button>
-              {!isAuthenticated && (
-                <p className="mt-2 text-center text-[10px] text-gray-400">
-                  Bạn cần đăng nhập trước khi tiếp tục đặt sân.
-                </p>
-              )}
+              <p className="mt-2 text-center text-[10px] text-gray-400">
+                You'll review your booking before confirming.
+              </p>
             </>
           ) : (
             <>
-              <p className="text-xl font-black text-gray-400">Chưa chọn khung giờ</p>
-              <div className="mt-4 space-y-2.5">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-400">Sân</span>
-                  <span className="font-semibold text-gray-500">{court?.name}</span>
+              <h2 className="text-xl font-black text-gray-900 tracking-tight">
+                No time selected
+              </h2>
+
+              <div className="mt-5 space-y-3 rounded-xl bg-gray-50/80 p-3.5 border border-gray-100">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-gray-400 font-medium">Court</span>
+                  <span className="font-semibold text-gray-700">{court?.name}</span>
                 </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-400">Ngày</span>
-                  <span className="font-semibold text-gray-500">{formattedDate}</span>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-gray-400 font-medium">Date</span>
+                  <span className="font-semibold text-gray-700">{formattedDate}</span>
                 </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-400">Thời lượng</span>
-                  <span className="font-semibold text-gray-500">–</span>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-gray-400 font-medium">Duration</span>
+                  <span className="font-semibold text-gray-400">-</span>
                 </div>
               </div>
+
               <button
+                id="availability-continue-booking"
+                type="button"
                 disabled
-                className="mt-6 flex w-full items-center justify-between rounded-xl bg-gray-100 px-5 py-3.5 text-sm font-bold text-gray-400 cursor-not-allowed"
+                aria-disabled="true"
+                className="mt-5 flex w-full items-center justify-between rounded-xl bg-gray-100 px-5 py-3.5 text-sm font-bold text-gray-400 cursor-not-allowed select-none shadow-none"
               >
-                Tiếp tục đặt sân
+                Continue Booking
                 <ArrowRight className="h-4 w-4" />
               </button>
-              {!isAuthenticated && (
-                <p className="mt-2 text-center text-[10px] text-gray-400">
-                  Bạn cần đăng nhập trước khi tiếp tục đặt sân.
-                </p>
-              )}
+              <p className="mt-2 text-center text-[10px] text-gray-400">
+                You'll review your booking before confirming.
+              </p>
             </>
           )}
         </div>

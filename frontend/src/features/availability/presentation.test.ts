@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { AvailabilityData, AvailabilitySlot } from "@/types/court.types"
-import { buildDateOptions, courtCalendarDate, formatSlotTime, getSlotStatus, selectedAvailableSlot } from "./presentation"
+import { buildDateOptions, courtCalendarDate, formatSlotTime, getSlotStatus, selectedAvailableSlot, selectedAvailableSlots } from "./presentation"
 
 const zone = "Asia/Ho_Chi_Minh"
 const now = new Date("2026-10-15T17:10:00Z") // 00:10 on Oct 16 at the venue.
@@ -53,5 +53,22 @@ describe("Single-slot selection uses the latest response", () => {
   })
   it("drops a stale available flag after the slot starts", () => {
     expect(selectedAvailableSlot(data, data.courtId, data.date, slot.id, new Date(slot.startsAt))).toBeNull()
+  })
+})
+
+describe("Multi-slot selection uses the latest response", () => {
+  const next = { ...slot, id: "slot-2", startsAt: slot.endsAt, endsAt: "2026-10-23T03:00:00Z" }
+  const pair = { ...data, slots: [slot, next] }
+  it("keeps both consecutive available slots", () => {
+    expect(selectedAvailableSlots(pair, data.courtId, data.date, [slot.id, next.id], now)).toEqual([slot, next])
+  })
+  it("drops the whole selection when one slot is no longer available", () => {
+    const changed = { ...pair, slots: [slot, { ...next, available: false }] }
+    expect(selectedAvailableSlots(changed, data.courtId, data.date, [slot.id, next.id], now)).toEqual([])
+  })
+  it("rejects stale court, date, or absent response", () => {
+    expect(selectedAvailableSlots(pair, "court-B", data.date, [slot.id, next.id], now)).toEqual([])
+    expect(selectedAvailableSlots(pair, data.courtId, "2026-10-24", [slot.id, next.id], now)).toEqual([])
+    expect(selectedAvailableSlots(undefined, data.courtId, data.date, [slot.id, next.id], now)).toEqual([])
   })
 })

@@ -49,3 +49,15 @@ export function selectedAvailableSlot(
   if (!data || data.courtId.toLowerCase() !== courtId.toLowerCase() || data.date !== date) return null
   return data.slots.find((slot) => slot.id === selectedId && getSlotStatus(slot, now) === "available") ?? null
 }
+
+export function selectedAvailableSlots(
+  data: AvailabilityData | undefined,
+  courtId: string,
+  date: string,
+  selectedIds: string[],
+  now: Date,
+): AvailabilitySlot[] {
+  if (!data || data.courtId.toLowerCase() !== courtId.toLowerCase() || data.date !== date) return []
+  const selected = selectedIds.map((id) => data.slots.find((slot) => slot.id === id && getSlotStatus(slot, now) === "available"))
+  return selected.every((slot): slot is AvailabilitySlot => slot !== undefined) ? selected : []
+}
