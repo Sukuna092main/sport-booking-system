@@ -11,13 +11,12 @@ import type { AvailabilitySlot } from "@/types/court.types"
 import type { BookingReviewHandoffData } from "@/features/bookings/types"
 import {
   buildBookingPayload,
-  fmtTime,
   formatTimeRange,
   formatTotalDuration,
-  getSlotStatus,
-  isSelectable,
   toggleSlotSelection,
 } from "@/features/bookings/consecutiveSlots"
+
+import { buildDateOptions, courtCalendarDate, DEFAULT_COURT_TIME_ZONE, formatSlotTime, getSlotStatus, selectedAvailableSlots } from "@/features/availability/presentation"
 
 /* ── Date Helpers ─────────────────────────────────────────────────── */
 
@@ -43,26 +42,6 @@ function fmtDateFull(dateStr: string) {
   })
 }
 
-/** Get YYYY-MM-DD string for today + offset days */
-function getDateString(offsetDays: number) {
-  const d = new Date()
-  d.setDate(d.getDate() + offsetDays)
-  return d.toISOString().split("T")[0]
-}
-
-/** Build an array of { label, value } for the date picker (today + 29 = 30 days horizon per SRS C-01) */
-function buildDateOptions() {
-  return Array.from({ length: 30 }, (_, i) => {
-    const dateStr = getDateString(i)
-    const [y, m, d] = dateStr.split("-").map(Number)
-    const date = new Date(y, m - 1, d)
-    const weekday = date.toLocaleDateString("en-US", { weekday: "short" }).toUpperCase()
-    const dayNum = date.getDate()
-    const monthAbbr = date.toLocaleDateString("en-US", { month: "short" })
-    return { value: dateStr, weekday, day: dayNum, month: monthAbbr }
-  })
-}
-
 /** Label for current month/year displayed on calendar strip */
 function getMonthYear(dateStr: string) {
   const [y, m, d] = dateStr.split("-").map(Number)
@@ -75,18 +54,20 @@ function SlotItem({
   slot,
   isSelected,
   onSelect,
+  timeZone,
   hasTopConnector = false,
   hasBottomConnector = false,
 }: {
   slot: AvailabilitySlot
   isSelected: boolean
   onSelect: () => void
+  timeZone: string
   hasTopConnector?: boolean
   hasBottomConnector?: boolean
 }) {
-  const status = getSlotStatus(slot)
-  const startTime = fmtTime(slot.startsAt)
-  const endTime = fmtTime(slot.endsAt)
+  const status = getSlotStatus(slot, new Date())
+  const startTime = formatSlotTime(slot.startsAt, timeZone)
+  const endTime = formatSlotTime(slot.endsAt, timeZone)
   const timeRange = `${startTime} - ${endTime}`
 
   if (status === "past") {
@@ -103,7 +84,7 @@ function SlotItem({
     )
   }
 
-  if (status === "booked") {
+  if (status === "unavailable") {
     return (
       <div className="flex items-center justify-between rounded-xl border border-rose-100 bg-[#FEF2F2] px-4 py-3.5 cursor-not-allowed select-none transition-all">
         <div className="flex items-center gap-2.5 text-sm text-rose-500">
@@ -111,40 +92,6 @@ function SlotItem({
           <span className="font-medium">{timeRange}</span>
         </div>
         <span className="flex items-center gap-1 rounded-md bg-rose-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-rose-400">
-          <span>-</span> BOOKED
-        </span>
-      </div>
-    )
-  }
-
-  if (status === "blackout") {
-    return (
-      <div
-        className="relative flex items-center justify-between overflow-hidden rounded-xl border border-purple-100 bg-[#FAF5FF] px-4 py-3.5 cursor-not-allowed select-none transition-all"
-        style={{
-          backgroundImage:
-            "repeating-linear-gradient(-45deg, #f3e8ff 0, #f3e8ff 2px, transparent 0, transparent 8px)",
-        }}
-      >
-        <div className="flex items-center gap-2.5 text-sm text-purple-600">
-          <Clock className="h-3.5 w-3.5 text-purple-400" />
-          <span className="font-medium">{timeRange}</span>
-        </div>
-        <span className="flex items-center gap-1 rounded-md bg-white/80 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-purple-600 shadow-xs">
-          <span>■</span> BLACKOUT
-        </span>
-      </div>
-    )
-  }
-
-  if (status === "unavailable") {
-    return (
-      <div className="flex items-center justify-between rounded-xl border border-amber-100 bg-[#FFFBEB] px-4 py-3.5 cursor-not-allowed select-none transition-all">
-        <div className="flex items-center gap-2.5 text-sm text-amber-600">
-          <Clock className="h-3.5 w-3.5 text-amber-400" />
-          <span className="font-medium">{timeRange}</span>
-        </div>
-        <span className="flex items-center gap-1 rounded-md bg-amber-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-600">
           <span>-</span> UNAVAILABLE
         </span>
       </div>
@@ -270,18 +217,16 @@ export function CourtAvailabilityPage() {
   const navigate = useNavigate()
   const { isAuthenticated } = useAuth()
 
-  const dateOptions = buildDateOptions()
-  const [selectedDate, setSelectedDate] = useState(dateOptions[0].value)
-  const [selectedSlots, setSelectedSlots] = useState<AvailabilitySlot[]>([])
+  const [selectedDate, setSelectedDate] = useState(() => courtCalendarDate(new Date(), DEFAULT_COURT_TIME_ZONE))
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [warningMessage, setWarningMessage] = useState<string | null>(null)
-
   const { data: court, isLoading: courtLoading } = useCourtById(courtId ?? "")
   const { data: sportTypes } = useSportTypes()
-  const {
-    data: availability,
-    isLoading: availLoading,
-    error: availError,
-  } = useCourtAvailability(courtId ?? "", selectedDate)
+  const { data: availability, isLoading: availLoading, error: availError, refetch: refetchAvailability } = useCourtAvailability(courtId ?? "", selectedDate)
+  const timeZone = availability?.timeZone ?? DEFAULT_COURT_TIME_ZONE
+  const dateOptions = buildDateOptions(new Date(), timeZone)
+  const selectedSlots = !availError && !availLoading
+    ? selectedAvailableSlots(availability, courtId ?? "", selectedDate, selectedIds, new Date()) : []
 
   const sportTypeMap = Object.fromEntries(
     (sportTypes ?? []).map((st) => [st.id, st.name])
@@ -291,52 +236,13 @@ export function CourtAvailabilityPage() {
   if (courtLoading) return <AvailabilitySkeleton />
 
 
-  // Generate fallback slots matching Screenshot 1 when API slots are empty or offline
-  const baseSlots: AvailabilitySlot[] =
-    availability?.slots && availability.slots.length > 0
-      ? availability.slots
-      : [
-          { start: 8, end: 9, available: false, status: "past" as const },
-          { start: 9, end: 10, available: true, status: "available" as const },
-          { start: 10, end: 11, available: true, status: "available" as const },
-          { start: 11, end: 12, available: true, status: "available" as const },
-          { start: 12, end: 13, available: false, status: "booked" as const },
-          { start: 13, end: 14, available: false, status: "blackout" as const },
-          { start: 14, end: 15, available: true, status: "available" as const },
-          { start: 15, end: 16, available: false, status: "unavailable" as const },
-          { start: 16, end: 17, available: true, status: "available" as const },
-        ].map((h, i) => {
-          const pad = (n: number) => String(n).padStart(2, "0")
-          return {
-            id: `slot-uuid-${i + 1}`,
-            startsAt: `${selectedDate}T${pad(h.start)}:00:00.000Z`,
-            endsAt: `${selectedDate}T${pad(h.end)}:00:00.000Z`,
-            available: h.available,
-            status: h.status,
-          }
-        })
-
-  // Ensure deterministic status for demo / mock matching Screenshot 1 if needed
-  const slots: AvailabilitySlot[] = baseSlots.map((s, idx) => {
-    if (s.status) return s
-    // For slots returned as unavailable without explicit status, provide rich mock mapping
-    if (!s.available && new Date(s.startsAt) > new Date()) {
-      if (idx === 4) return { ...s, status: "booked" }
-      if (idx === 5) return { ...s, status: "blackout" }
-      if (idx === 7) return { ...s, status: "unavailable" }
-    }
-    return s
-  })
-
-  /* Split slots into two columns: left column has 08-09, 10-11, 12-13, 14-15, 16-17; right has 09-10, 11-12, 13-14, 15-16 */
-  const leftSlots = slots.filter((_, i) => i % 2 === 0)
-  const rightSlots = slots.filter((_, i) => i % 2 === 1)
+  const slots = availability?.slots ?? []
 
   /**
    * Selection handler with Consecutive Multi-Slot constraints.
    */
   function handleSlotSelect(slot: AvailabilitySlot) {
-    if (!isSelectable(slot)) return
+    if (getSlotStatus(slot, new Date()) !== "available" || !availability || availError) return
 
     const { newSlots, warningMessage: msg } = toggleSlotSelection(
       selectedSlots,
@@ -347,17 +253,17 @@ export function CourtAvailabilityPage() {
       }
     )
 
-    setSelectedSlots(newSlots)
+    setSelectedIds(newSlots.map((item) => item.id))
     setWarningMessage(msg)
   }
 
   function handleDateChange(dateValue: string) {
     setSelectedDate(dateValue)
-    setSelectedSlots([])
+    setSelectedIds([])
     setWarningMessage(null)
   }
 
-  const timeRangeText = formatTimeRange(selectedSlots)
+  const timeRangeText = selectedSlots.length ? `${formatSlotTime(selectedSlots[0].startsAt, timeZone)} – ${formatSlotTime(selectedSlots[selectedSlots.length - 1].endsAt, timeZone)}` : formatTimeRange(selectedSlots)
   const formattedDate = selectedDate ? fmtDateShort(selectedDate) : ""
   const formattedDateHeader = selectedDate ? fmtDateFull(selectedDate) : ""
   const durationText = formatTotalDuration(
@@ -373,7 +279,7 @@ export function CourtAvailabilityPage() {
     : null
 
   function handleContinueBooking() {
-    if (!bookingPayload || selectedSlots.length === 0 || !courtId) return
+    if (!bookingPayload || selectedSlots.length === 0 || selectedSlots.length !== selectedIds.length || !courtId || availError || availLoading) return
 
     // Prepare full handoff review data
     const reviewData: BookingReviewHandoffData = {
@@ -396,7 +302,7 @@ export function CourtAvailabilityPage() {
         id: s.id,
         startsAt: s.startsAt,
         endsAt: s.endsAt,
-        formattedRange: `${fmtTime(s.startsAt)} - ${fmtTime(s.endsAt)}`,
+        formattedRange: `${formatSlotTime(s.startsAt, timeZone)} - ${formatSlotTime(s.endsAt, timeZone)}`,
       })),
       payload: bookingPayload,
     }
@@ -537,12 +443,12 @@ export function CourtAvailabilityPage() {
                 className="mb-4 flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-600"
               >
                 <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-                Không thể tải danh sách slot. Vui lòng thử lại.
+                Không thể tải danh sách slot. Vui lòng thử lại. <button className="underline" onClick={() => refetchAvailability()}>Thử lại</button>
               </div>
             )}
 
             {/* Slot Grid (2 Columns) */}
-            {availLoading ? (
+            {availError ? null : availLoading ? (
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="h-6 w-6 animate-spin text-[#16A34A]" />
                 <span className="ml-2 text-sm text-gray-500 font-medium">Đang tải khung giờ…</span>
@@ -555,35 +461,10 @@ export function CourtAvailabilityPage() {
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-                {/* Column 1 */}
-                <div className="space-y-2.5">
-                  {leftSlots.map((slot) => {
-                    const isSel = isSlotSelected(slot.id)
-                    return (
-                      <SlotItem
-                        key={slot.id}
-                        slot={slot}
-                        isSelected={isSel}
-                        onSelect={() => handleSlotSelect(slot)}
-                      />
-                    )
-                  })}
-                </div>
-
-                {/* Column 2 */}
-                <div className="space-y-2.5">
-                  {rightSlots.map((slot) => {
-                    const isSel = isSlotSelected(slot.id)
-                    return (
-                      <SlotItem
-                        key={slot.id}
-                        slot={slot}
-                        isSelected={isSel}
-                        onSelect={() => handleSlotSelect(slot)}
-                      />
-                    )
-                  })}
-                </div>
+                {slots.map((slot) => (
+                  <SlotItem key={slot.id} slot={slot} timeZone={timeZone}
+                    isSelected={isSlotSelected(slot.id)} onSelect={() => handleSlotSelect(slot)} />
+                ))}
               </div>
             )}
           </div>
@@ -595,7 +476,7 @@ export function CourtAvailabilityPage() {
             YOUR SELECTION
           </p>
 
-          {selectedSlots.length > 0 ? (
+          {selectedSlots.length > 0 && selectedSlots.length === selectedIds.length ? (
             <>
               <h2 className="text-2xl font-black text-gray-900 tracking-tight">
                 {timeRangeText}
