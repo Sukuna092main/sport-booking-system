@@ -33,8 +33,21 @@ func (r *SQLRepository) Read(ctx context.Context, id string, weekday int, from, 
 		return Snapshot{}, err
 	}
 	defer tx.Rollback()
+	result, err := ReadSnapshot(ctx, tx, id, weekday, from, to)
+	if err != nil {
+		return Snapshot{}, err
+	}
+	if err = tx.Commit(); err != nil {
+		return Snapshot{}, err
+	}
+	return result, nil
+}
+
+// ReadSnapshot uses the caller's transaction. Booking writers lock the customer
+// and court first; schedule/blackout writers must also lock that court row.
+func ReadSnapshot(ctx context.Context, tx *sql.Tx, id string, weekday int, from, to time.Time) (Snapshot, error) {
 	var result Snapshot
-	err = tx.QueryRowContext(ctx, `SELECT c.id::text,c.is_active,c.slot_duration_minutes FROM courts c JOIN sport_types s ON s.id=c.sport_type_id WHERE c.id=$1 AND c.is_active AND s.is_active`, id).Scan(&result.CourtID, &result.Active, &result.DurationMinutes)
+	err := tx.QueryRowContext(ctx, `SELECT c.id::text,c.is_active,c.slot_duration_minutes FROM courts c JOIN sport_types s ON s.id=c.sport_type_id WHERE c.id=$1 AND c.is_active AND s.is_active`, id).Scan(&result.CourtID, &result.Active, &result.DurationMinutes)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Snapshot{}, ErrCourtNotFound
 	}
@@ -96,8 +109,5 @@ func (r *SQLRepository) Read(ctx context.Context, id string, weekday int, from, 
 		return Snapshot{}, err
 	}
 	rows.Close()
-	if err = tx.Commit(); err != nil {
-		return Snapshot{}, err
-	}
 	return result, nil
 }

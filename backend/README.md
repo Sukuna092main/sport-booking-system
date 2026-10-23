@@ -17,8 +17,12 @@ Base path `/api/v1`. Swagger: `/api/v1/docs`; spec: `/api/v1/openapi.yaml`.
 | Tìm/lọc/phân trang sân | GET `/courts` | Public |
 | Chi tiết sân | GET `/courts/{courtId}` | Public |
 | Slot theo ngày | GET `/courts/{courtId}/availability?date=YYYY-MM-DD` | Public |
+| Tạo booking, retry an toàn | POST `/bookings` + `Idempotency-Key` | USER/ADMIN, chính mình |
+| Lịch sử của tôi | GET `/bookings?page=1&pageSize=20&status=CONFIRMED` | USER/ADMIN, chính mình |
+| Chi tiết booking của tôi | GET `/bookings/{bookingId}` | Chủ sở hữu |
+| Hủy booking của tôi | POST `/bookings/{bookingId}/cancel` | Chủ sở hữu, trước slot đầu tiên |
 
-Booking và Admin CRUD là các task tiếp theo, còn `planned` trong Swagger. Guard ADMIN đã có và được test, chưa đăng ký route CRUD chưa triển khai.
+Booking đã triển khai đến Create/History/Detail/Cancel. Admin CRUD còn `planned` trong Swagger. Guard ADMIN đã có và được test, chưa đăng ký route CRUD chưa triển khai. Xem [hợp đồng và hướng dẫn Booking](internal/Booking/README.md).
 
 ## Chạy backend
 
@@ -58,7 +62,7 @@ $env:CORS_ALLOWED_ORIGINS = "http://localhost:5173,http://127.0.0.1:5173"
 
 Khi biến chưa được đặt, development dùng hai origin local trên; test/production dùng allowlist rỗng. Đặt biến thành chuỗi rỗng để đóng CORS. Cấu hình sai làm server từ chối khởi động. Với online, Hưng cấu hình origin HTTPS thật do Duy bàn giao rồi redeploy; phải smoke trên URL thực tế.
 
-Preflight `OPTIONS` từ origin trong allowlist trả 204, hỗ trợ các method REST và headers `Authorization`, `Content-Type`, `Accept`, `X-Request-ID`. Origin/header/method không được phép khiến preflight trả lỗi. Response thực từ origin được phép vẫn giữ mã lỗi Auth 400/401/403 và expose `X-Request-ID`. Không bật cookie credentials. CORS kiểm soát quyền trình duyệt đọc response; JWT và role middleware tiếp tục kiểm soát API, kể cả với curl hoặc Swagger cùng origin.
+Preflight `OPTIONS` từ origin trong allowlist trả 204, hỗ trợ các method REST và headers `Authorization`, `Content-Type`, `Accept`, `X-Request-ID`, `Idempotency-Key`. Origin/header/method không được phép khiến preflight trả lỗi. Response thực từ origin được phép vẫn giữ mã lỗi Auth 400/401/403 và expose `X-Request-ID`. Không bật cookie credentials. CORS kiểm soát quyền trình duyệt đọc response; JWT và role middleware tiếp tục kiểm soát API, kể cả với curl hoặc Swagger cùng origin.
 
 ### Docker cục bộ
 
