@@ -22,7 +22,7 @@ const swaggerPage = `<!doctype html>
   <style>body { margin: 0; background: #fafafa; } .notice { padding: 12px 24px; font: 14px sans-serif; background: #fff3cd; }</style>
 </head>
 <body>
-  <div class="notice">API v0.4: Auth, hồ sơ, tìm sân, availability và Booking Create/History/Detail/Cancel đã triển khai. Xem x-implementation-status của từng operation; Admin CRUD đang là hợp đồng dự kiến.</div>
+  <div class="notice">API v0.5: Auth, Profile, Courts, Availability, Booking và các API Admin đã triển khai. Các thay đổi quản trị yêu cầu quyền ADMIN.</div>
   <div id="swagger-ui"></div>
   <script src="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui-bundle.js"></script>
   <script src="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui-standalone-preset.js"></script>

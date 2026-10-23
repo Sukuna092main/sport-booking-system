@@ -1,12 +1,12 @@
 # REST Contract và Swagger Base
 
-**Phiên bản:** 0.4.0 · **Nguồn chuẩn:** [OpenAPI 3.0.3](../../../backend/internal/platform/openapi/openapi.yaml). Huy giao triển khai BE đến My Booking/Detail/Cancel; FE đối chiếu contract trước tích hợp.
+**Phiên bản:** 0.5.0 · **Nguồn chuẩn:** [OpenAPI 3.0.3](../../../backend/internal/platform/openapi/openapi.yaml). Huy giao triển khai BE đến My Booking/Detail/Cancel; FE đối chiếu contract trước tích hợp.
 
 ## Cách mở
 
 Chạy backend theo [hướng dẫn](../../../backend/README.md), rồi mở `http://localhost:8080/api/v1/docs`. File thô ở `http://localhost:8080/api/v1/openapi.yaml`. Trang Swagger dùng `swagger-ui-dist@5.11.0` từ unpkg; trình duyệt cần truy cập CDN để tải giao diện, còn file OpenAPI được server phục vụ cục bộ.
 
-**Đã triển khai:** Ping, Register/Login, Profile GET/PATCH, Sport Types, Court Browse/Search/Detail, Availability và Booking Create/History/Detail/Cancel. Mỗi operation có `x-implementation-status`; Admin CRUD vẫn là `planned`. Xem [cách chạy](../../../backend/README.md), [quy tắc và ví dụ Booking](../../../backend/internal/Booking/README.md), [kết quả kiểm thử Booking](../../testing/BOOKING_API_REVIEW.md).
+**Đã triển khai:** Ping, Register/Login, Profile GET/PATCH, Sport Types, Court Browse/Search/Detail, Availability và Booking Create/History/Detail/Cancel. Mỗi operation có `x-implementation-status`; Admin CRUD, lịch/slot, blackout, tra cứu/hủy booking và thống kê đã triển khai. Xem [cách chạy](../../../backend/README.md), [quy tắc và ví dụ Booking](../../../backend/internal/Booking/README.md), [kết quả kiểm thử Booking](../../testing/BOOKING_API_REVIEW.md).
 
 ## Quy ước chung
 
@@ -48,7 +48,7 @@ Các vi phạm như quá 30 ngày, slot quá khứ, vượt giới hạn ba book
 | FR-18: thống kê | `/admin/statistics` GET. |
 | FR-19: audit | Service ghi `audit_logs` khi thay đổi quản trị và booking; SRS chưa yêu cầu endpoint đọc audit. |
 
-Bảng trên mô tả phạm vi thiết kế MVP. FR-01–FR-06 và luồng Booking FR-08–FR-14 đã triển khai. FR-19 đã có audit tạo/hủy booking trong transaction. FR-07 và FR-15–FR-18 cùng audit của Admin là các task tiếp theo; chưa có Admin CRUD.
+Bảng trên mô tả phạm vi thiết kế MVP. FR-01–FR-06 và luồng Booking FR-08–FR-14 đã triển khai. FR-19 đã có audit tạo/hủy booking trong transaction. FR-07 và FR-15–FR-18 cùng audit của Admin đã triển khai trong backend.
 
 ## Nguồn và các điểm cần duyệt
 
@@ -57,4 +57,4 @@ Bảng trên mô tả phạm vi thiết kế MVP. FR-01–FR-06 và luồng Book
 - [Thẻ kiến trúc](https://trello.com/c/0VhI2oe1): Go/Gin, REST `/api/v1`, JWT+bcrypt, USER/ADMIN.
 - [Task API](https://trello.com/c/ol2X6l9v): contract và Swagger phải qua review trước tích hợp FE.
 
-Các API đã triển khai giữ DTO đã chốt: access token, ACTIVE/INACTIVE, profile self-only, date theo APP_TIMEZONE. Huy đã giao tự chốt các quy tắc Booking trong task này; Duy đối chiếu contract v0.4.0 trước tích hợp FE. Admin còn planned được review trong task tương ứng; khi đổi contract phải tăng version và đồng bộ FE/backend.
+Các API đã triển khai giữ DTO đã chốt: access token, ACTIVE/INACTIVE, profile self-only, date theo APP_TIMEZONE. Huy đã giao tự chốt các quy tắc Booking trong task này; Duy đối chiếu contract v0.5.0 trước tích hợp FE. Các thay đổi Admin được đối chiếu kế hoạch BE Chương 13–14; khi đổi contract phải tăng version và đồng bộ FE/backend.
