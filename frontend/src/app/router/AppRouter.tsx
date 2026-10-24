@@ -17,6 +17,8 @@ import { AdminCourtsPage } from "@/app/pages/AdminCourtsPage"
 import { AdminSportTypesPage } from "@/app/pages/AdminSportTypesPage"
 import { AdminSchedulePage } from "@/app/pages/AdminSchedulePage"
 import { AdminBlackoutsPage } from "@/app/pages/AdminBlackoutsPage"
+import { AdminBookingsPage } from "@/app/pages/AdminBookingsPage"
+import { AdminBookingDetailPage } from "@/app/pages/AdminBookingDetailPage"
 import { ProtectedRoute } from "./ProtectedRoute"
 
 export function AppRouter() {
@@ -54,6 +56,8 @@ export function AppRouter() {
                 <Route path="courts" element={<AdminCourtsPage />} />
                 <Route path="schedule" element={<AdminSchedulePage />} />
                 <Route path="blackouts" element={<AdminBlackoutsPage />} />
+                <Route path="bookings" element={<AdminBookingsPage />} />
+                <Route path="bookings/:bookingId" element={<AdminBookingDetailPage />} />
                 <Route path="sport-types" element={<AdminSportTypesPage />} />
               </Route>
             </Route>
