@@ -15,6 +15,7 @@ import { ForbiddenPage } from "@/app/pages/ForbiddenPage"
 import { AdminLayout } from "@/features/admin/AdminLayout"
 import { AdminCourtsPage } from "@/app/pages/AdminCourtsPage"
 import { AdminSportTypesPage } from "@/app/pages/AdminSportTypesPage"
+import { AdminSchedulePage } from "@/app/pages/AdminSchedulePage"
 import { ProtectedRoute } from "./ProtectedRoute"
 
 export function AppRouter() {
@@ -50,6 +51,7 @@ export function AppRouter() {
               <Route path="/admin" element={<AdminLayout />}>
                 <Route index element={<Navigate to="/admin/courts" replace />} />
                 <Route path="courts" element={<AdminCourtsPage />} />
+                <Route path="schedule" element={<AdminSchedulePage />} />
                 <Route path="sport-types" element={<AdminSportTypesPage />} />
               </Route>
             </Route>

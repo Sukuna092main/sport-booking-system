@@ -1,5 +1,5 @@
 import { Link, NavLink, Outlet } from "react-router-dom"
-import { Shield, Layers, LayoutGrid, ArrowLeft } from "lucide-react"
+import { Shield, Layers, LayoutGrid, ArrowLeft, CalendarCheck } from "lucide-react"
 
 export function AdminLayout() {
   return (
@@ -49,6 +49,20 @@ export function AdminLayout() {
         >
           <LayoutGrid className="h-4 w-4" />
           <span>Sân Thể Thao (Courts)</span>
+        </NavLink>
+
+        <NavLink
+          to="/admin/schedule"
+          className={({ isActive }) =>
+            `flex items-center gap-2 border-b-2 px-4 py-2.5 text-xs font-black uppercase tracking-wider transition-all ${
+              isActive
+                ? "border-[#16A34A] text-emerald-800 bg-white rounded-t-xl"
+                : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-900"
+            }`
+          }
+        >
+          <CalendarCheck className="h-4 w-4" />
+          <span>Lịch & Khung Giờ (Schedule)</span>
         </NavLink>
 
         <NavLink

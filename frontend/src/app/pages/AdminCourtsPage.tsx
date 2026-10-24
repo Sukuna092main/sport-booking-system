@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react"
+import { Link } from "react-router-dom"
 import {
   LayoutGrid,
   Plus,
@@ -433,6 +434,15 @@ export function AdminCourtsPage() {
                       {/* Thao tác */}
                       <td className="px-5 py-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
+                          <Link
+                            to={`/admin/schedule?courtId=${court.id}`}
+                            className="flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[11px] font-bold text-emerald-800 hover:bg-emerald-100 transition-colors shadow-2xs"
+                            title="Quản lý giờ mở cửa và cấu hình time slot cho sân này"
+                          >
+                            <Clock className="h-3 w-3 text-emerald-600" />
+                            <span>Lịch / Slot</span>
+                          </Link>
+
                           <button
                             type="button"
                             onClick={() => setEditingCourt(court)}
