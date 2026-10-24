@@ -1,5 +1,5 @@
 import { Link, NavLink, Outlet } from "react-router-dom"
-import { Shield, Layers, LayoutGrid, ArrowLeft, CalendarCheck, CalendarX } from "lucide-react"
+import { Shield, Layers, LayoutGrid, ArrowLeft, CalendarCheck, CalendarX, BookmarkCheck } from "lucide-react"
 
 export function AdminLayout() {
   return (
@@ -77,6 +77,20 @@ export function AdminLayout() {
         >
           <CalendarX className="h-4 w-4" />
           <span>Khóa Sân (Blackout)</span>
+        </NavLink>
+
+        <NavLink
+          to="/admin/bookings"
+          className={({ isActive }) =>
+            `flex items-center gap-2 border-b-2 px-4 py-2.5 text-xs font-black uppercase tracking-wider transition-all ${
+              isActive
+                ? "border-[#16A34A] text-emerald-800 bg-white rounded-t-xl"
+                : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-900"
+            }`
+          }
+        >
+          <BookmarkCheck className="h-4 w-4" />
+          <span>Quản lý Đặt sân (Bookings)</span>
         </NavLink>
 
         <NavLink

@@ -20,6 +20,13 @@ import type {
   BlackoutResponse,
   BlackoutWrite,
 } from "@/types/blackout.types"
+import type {
+  AdminBookingListResponse,
+  AdminBookingQueryParams,
+  AdminBookingResponse,
+  AdminCancelBookingPayload,
+  AdminStatisticsResponse,
+} from "@/types/adminBooking.types"
 
 /**
  * Admin Inventory & Schedule API service — theo OpenAPI 0.5.0 contract.
@@ -172,6 +179,49 @@ export const adminApi = {
   deactivateCourtBlackout(courtId: string, blackoutId: string): Promise<void> {
     return apiClient
       .delete<void>(`/admin/courts/${courtId}/blackouts/${blackoutId}`)
+      .then((r) => r.data)
+  },
+
+  /**
+   * GET /admin/bookings
+   * Tra cứu danh sách booking quản trị có phân trang và bộ lọc (courtId, date, status).
+   */
+  listBookings(params?: AdminBookingQueryParams): Promise<AdminBookingListResponse> {
+    return apiClient
+      .get<AdminBookingListResponse>("/admin/bookings", { params })
+      .then((r) => r.data)
+  },
+
+  /**
+   * GET /admin/bookings/:bookingId
+   * Chi tiết booking cho quản trị.
+   */
+  getBooking(bookingId: string): Promise<AdminBookingResponse> {
+    return apiClient
+      .get<AdminBookingResponse>(`/admin/bookings/${bookingId}`)
+      .then((r) => r.data)
+  },
+
+  /**
+   * POST /admin/bookings/:bookingId/cancel
+   * Admin hủy booking bị ảnh hưởng và ghi lý do vào audit log.
+   */
+  cancelBooking(
+    bookingId: string,
+    payload: AdminCancelBookingPayload,
+  ): Promise<AdminBookingResponse> {
+    return apiClient
+      .post<AdminBookingResponse>(`/admin/bookings/${bookingId}/cancel`, payload)
+      .then((r) => r.data)
+  },
+
+  /**
+   * GET /admin/statistics?from=YYYY-MM-DD&to=YYYY-MM-DD
+   * Thống kê số booking cơ bản.
+   */
+  getStatistics(params: { from: string; to: string }): Promise<AdminStatisticsResponse> {
+    return apiClient
+      .get<AdminStatisticsResponse>("/admin/statistics", { params })
       .then((r) => r.data)
   },
 }
