@@ -281,6 +281,12 @@ export function CourtAvailabilityPage() {
   function handleContinueBooking() {
     if (!bookingPayload || selectedSlots.length === 0 || selectedSlots.length !== selectedIds.length || !courtId || availError || availLoading) return
 
+    const [y, m, d] = selectedDate.split("-").map(Number)
+    const dateObj = new Date(y, m - 1, d)
+    const formattedDateVi = `${dateObj.toLocaleDateString("vi-VN", {
+      weekday: "long",
+    })}, ${dateObj.toLocaleDateString("vi-VN")}`
+
     // Prepare full handoff review data
     const reviewData: BookingReviewHandoffData = {
       courtId,
@@ -290,12 +296,12 @@ export function CourtAvailabilityPage() {
       sportTypeId: court?.sportTypeId ?? "",
       locationText: court?.description ?? "Riverside Sports Center · 12 Riverwalk Avenue",
       bookingDate: selectedDate,
-      formattedDate: `${new Date(selectedDate).toLocaleDateString("vi-VN", {
-        weekday: "long",
-      })}, ${new Date(selectedDate).toLocaleDateString("vi-VN")}`,
+      formattedDate: formattedDateVi,
       slotDurationMinutes: court?.slotDurationMinutes ?? 60,
       minConsecutiveSlots: court?.minConsecutiveSlots ?? 1,
       maxConsecutiveSlots: court?.maxConsecutiveSlots ?? 4,
+      referencePriceAmount: court?.referencePriceAmount ?? null,
+      referencePriceCurrency: court?.referencePriceCurrency ?? "VND",
       timeRangeText,
       durationText,
       selectedSlots: selectedSlots.map((s) => ({

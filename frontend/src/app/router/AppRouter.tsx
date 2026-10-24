@@ -2,6 +2,7 @@ import { BrowserRouter, Route, Routes } from "react-router-dom"
 import { AuthProvider } from "@/features/auth/AuthContext"
 import { AppLayout } from "@/components/layout/AppLayout"
 import { BookingsPage } from "@/app/pages/BookingsPage"
+import { BookingDetailPage } from "@/app/pages/BookingDetailPage"
 import { CourtsPage } from "@/app/pages/CourtsPage"
 import { CourtDetailPage } from "@/app/pages/CourtDetailPage"
 import { CourtAvailabilityPage } from "@/app/pages/CourtAvailabilityPage"
@@ -38,6 +39,7 @@ export function AppRouter() {
             <Route element={<ProtectedRoute />}>
               <Route path="/profile" element={<ProfilePage />} />
               <Route path="/bookings" element={<BookingsPage />} />
+              <Route path="/bookings/:bookingId" element={<BookingDetailPage />} />
             </Route>
 
             {/* ADMIN-only routes */}

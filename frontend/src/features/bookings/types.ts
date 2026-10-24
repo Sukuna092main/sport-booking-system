@@ -10,6 +10,39 @@ export interface CreateBookingPayload {
 
 export type SlotStatus = "available" | "unavailable" | "past" | "booked" | "blackout"
 
+export type BookingStatus = "CONFIRMED" | "CANCELLED"
+
+export interface BookingSlotItem {
+  timeSlotId: string
+  startsAt: string // UTC snapshot
+  endsAt: string   // UTC snapshot
+}
+
+export interface BookingItem {
+  id: string
+  bookingCode: string
+  customerId: string
+  courtId: string
+  bookingDate: string // YYYY-MM-DD
+  status: BookingStatus
+  slots: BookingSlotItem[]
+  createdAt: string
+  cancelledAt?: string | null
+}
+
+export interface BookingResponse {
+  data: BookingItem
+}
+
+export interface BookingListResponse {
+  data: BookingItem[]
+  meta: {
+    page: number
+    pageSize: number
+    total: number
+  }
+}
+
 export interface BookingReviewHandoffData {
   courtId: string
   courtName: string
@@ -22,6 +55,8 @@ export interface BookingReviewHandoffData {
   slotDurationMinutes: number
   minConsecutiveSlots: number
   maxConsecutiveSlots: number
+  referencePriceAmount?: string | null
+  referencePriceCurrency?: string | null
   timeRangeText: string
   durationText: string
   selectedSlots: Array<{
@@ -41,3 +76,6 @@ export type SimulationOutcome =
   | "error_limit_reached"
   | "error_horizon_exceeded"
   | "error_timeout"
+
+export type SubmissionMode = "real_api" | SimulationOutcome
+
