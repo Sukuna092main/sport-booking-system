@@ -1,4 +1,4 @@
-import { BrowserRouter, Route, Routes } from "react-router-dom"
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom"
 import { AuthProvider } from "@/features/auth/AuthContext"
 import { AppLayout } from "@/components/layout/AppLayout"
 import { BookingsPage } from "@/app/pages/BookingsPage"
@@ -12,6 +12,9 @@ import { LoginPage } from "@/app/pages/LoginPage"
 import { ProfilePage } from "@/app/pages/ProfilePage"
 import { RegisterPage } from "@/app/pages/RegisterPage"
 import { ForbiddenPage } from "@/app/pages/ForbiddenPage"
+import { AdminLayout } from "@/features/admin/AdminLayout"
+import { AdminCourtsPage } from "@/app/pages/AdminCourtsPage"
+import { AdminSportTypesPage } from "@/app/pages/AdminSportTypesPage"
 import { ProtectedRoute } from "./ProtectedRoute"
 
 export function AppRouter() {
@@ -44,7 +47,11 @@ export function AppRouter() {
 
             {/* ADMIN-only routes */}
             <Route element={<ProtectedRoute requiredRole="ADMIN" />}>
-              {/* Future admin pages go here */}
+              <Route path="/admin" element={<AdminLayout />}>
+                <Route index element={<Navigate to="/admin/courts" replace />} />
+                <Route path="courts" element={<AdminCourtsPage />} />
+                <Route path="sport-types" element={<AdminSportTypesPage />} />
+              </Route>
             </Route>
           </Route>
         </Routes>
