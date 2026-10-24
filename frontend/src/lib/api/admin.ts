@@ -10,9 +10,13 @@ import type {
   SportTypesResponse,
   AdminCourtQueryParams,
 } from "@/types/court.types"
+import type {
+  OperatingHoursResponse,
+  ReplaceOperatingHoursPayload,
+} from "@/types/schedule.types"
 
 /**
- * Admin Inventory API service — theo OpenAPI 0.5.0 contract.
+ * Admin Inventory & Schedule API service — theo OpenAPI 0.5.0 contract.
  *
  * GET    /admin/sport-types               → 200 { data: SportType[] }
  * POST   /admin/sport-types               → 201 { data: SportType }
@@ -23,6 +27,9 @@ import type {
  * POST   /admin/courts                    → 201 { data: Court }
  * PATCH  /admin/courts/:courtId           → 200 { data: Court }
  * DELETE /admin/courts/:courtId           → 204 No Content (deactivate)
+ *
+ * GET    /admin/courts/:courtId/operating-hours → 200 { data: OperatingHoursData }
+ * PUT    /admin/courts/:courtId/operating-hours → 200 { data: OperatingHoursData }
  */
 export const adminApi = {
   /**
@@ -87,5 +94,28 @@ export const adminApi = {
    */
   deactivateCourt(courtId: string): Promise<void> {
     return apiClient.delete<void>(`/admin/courts/${courtId}`).then((r) => r.data)
+  },
+
+  /**
+   * GET /admin/courts/:courtId/operating-hours
+   * Xem lịch mở cửa và mẫu slot hiện hành của sân.
+   */
+  getOperatingHours(courtId: string): Promise<OperatingHoursResponse> {
+    return apiClient
+      .get<OperatingHoursResponse>(`/admin/courts/${courtId}/operating-hours`)
+      .then((r) => r.data)
+  },
+
+  /**
+   * PUT /admin/courts/:courtId/operating-hours
+   * Thay thế lịch mở cửa hằng tuần của sân và tái tạo mẫu slot hiện hành.
+   */
+  replaceOperatingHours(
+    courtId: string,
+    payload: ReplaceOperatingHoursPayload,
+  ): Promise<OperatingHoursResponse> {
+    return apiClient
+      .put<OperatingHoursResponse>(`/admin/courts/${courtId}/operating-hours`, payload)
+      .then((r) => r.data)
   },
 }
