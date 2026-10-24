@@ -14,6 +14,12 @@ import type {
   OperatingHoursResponse,
   ReplaceOperatingHoursPayload,
 } from "@/types/schedule.types"
+import type {
+  BlackoutListResponse,
+  BlackoutPatch,
+  BlackoutResponse,
+  BlackoutWrite,
+} from "@/types/blackout.types"
 
 /**
  * Admin Inventory & Schedule API service — theo OpenAPI 0.5.0 contract.
@@ -30,6 +36,11 @@ import type {
  *
  * GET    /admin/courts/:courtId/operating-hours → 200 { data: OperatingHoursData }
  * PUT    /admin/courts/:courtId/operating-hours → 200 { data: OperatingHoursData }
+ *
+ * GET    /admin/courts/:courtId/blackouts       → 200 { data: Blackout[] }
+ * POST   /admin/courts/:courtId/blackouts       → 201 { data: Blackout }
+ * PATCH  /admin/courts/:courtId/blackouts/:id   → 200 { data: Blackout }
+ * DELETE /admin/courts/:courtId/blackouts/:id   → 204 No Content (deactivate)
  */
 export const adminApi = {
   /**
@@ -118,4 +129,50 @@ export const adminApi = {
       .put<OperatingHoursResponse>(`/admin/courts/${courtId}/operating-hours`, payload)
       .then((r) => r.data)
   },
+
+  /**
+   * GET /admin/courts/:courtId/blackouts
+   * Danh sách lịch chặn của sân (gồm cả bản ghi active và inactive).
+   */
+  listCourtBlackouts(courtId: string): Promise<BlackoutListResponse> {
+    return apiClient
+      .get<BlackoutListResponse>(`/admin/courts/${courtId}/blackouts`)
+      .then((r) => r.data)
+  },
+
+  /**
+   * POST /admin/courts/:courtId/blackouts
+   * Tạo lịch chặn sân mới. Booking đã xác nhận không bị tự hủy.
+   */
+  createCourtBlackout(courtId: string, payload: BlackoutWrite): Promise<BlackoutResponse> {
+    return apiClient
+      .post<BlackoutResponse>(`/admin/courts/${courtId}/blackouts`, payload)
+      .then((r) => r.data)
+  },
+
+  /**
+   * PATCH /admin/courts/:courtId/blackouts/:blackoutId
+   * Sửa hoặc thay đổi trạng thái kích hoạt của lịch chặn.
+   */
+  updateCourtBlackout(
+    courtId: string,
+    blackoutId: string,
+    payload: BlackoutPatch,
+  ): Promise<BlackoutResponse> {
+    return apiClient
+      .patch<BlackoutResponse>(`/admin/courts/${courtId}/blackouts/${blackoutId}`, payload)
+      .then((r) => r.data)
+  },
+
+  /**
+   * DELETE /admin/courts/:courtId/blackouts/:blackoutId
+   * Tắt lịch chặn bằng xóa mềm (isActive=false, giữ lịch sử và audit log).
+   * Thao tác idempotent (gọi lại vẫn trả 204).
+   */
+  deactivateCourtBlackout(courtId: string, blackoutId: string): Promise<void> {
+    return apiClient
+      .delete<void>(`/admin/courts/${courtId}/blackouts/${blackoutId}`)
+      .then((r) => r.data)
+  },
 }
+

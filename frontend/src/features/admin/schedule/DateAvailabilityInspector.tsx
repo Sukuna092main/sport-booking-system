@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react"
+import { Link } from "react-router-dom"
 import {
   Calendar,
   Clock,
@@ -93,11 +94,19 @@ export function DateAvailabilityInspector({
       </div>
 
       {/* ── Separate Blackout Notice (Requirement: CourtBlackout UI tách riêng) ── */}
-      <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-2.5 text-xs text-amber-900">
-        <ShieldAlert className="h-4 w-4 text-amber-600 shrink-0" />
-        <span className="text-[11px]">
-          <strong>Lưu ý:</strong> Quản lý lịch chặn sân (Court Blackouts) được thực hiện trong màn hình quản trị Blackout riêng biệt, không tạo/sửa/xóa blackout tại thẻ cấu hình lịch này.
-        </span>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-2.5 text-xs text-amber-900">
+        <div className="flex items-center gap-2">
+          <ShieldAlert className="h-4 w-4 text-amber-600 shrink-0" />
+          <span className="text-[11px]">
+            <strong>Lưu ý:</strong> Quản lý lịch chặn sân (Court Blackouts) được thực hiện trong màn hình quản trị Blackout riêng biệt, không tạo/sửa/xóa blackout tại thẻ cấu hình lịch này.
+          </span>
+        </div>
+        <Link
+          to={`/admin/blackouts?courtId=${court.id}`}
+          className="shrink-0 font-bold text-amber-900 underline hover:text-amber-950 text-[11px] self-end sm:self-auto"
+        >
+          Đi tới Quản lý Blackout &rarr;
+        </Link>
       </div>
 
       {/* ── 30-Day Date Horizon Picker ── */}
