@@ -16,6 +16,7 @@ import { AdminLayout } from "@/features/admin/AdminLayout"
 import { AdminCourtsPage } from "@/app/pages/AdminCourtsPage"
 import { AdminSportTypesPage } from "@/app/pages/AdminSportTypesPage"
 import { AdminSchedulePage } from "@/app/pages/AdminSchedulePage"
+import { AdminBlackoutsPage } from "@/app/pages/AdminBlackoutsPage"
 import { ProtectedRoute } from "./ProtectedRoute"
 
 export function AppRouter() {
@@ -52,6 +53,7 @@ export function AppRouter() {
                 <Route index element={<Navigate to="/admin/courts" replace />} />
                 <Route path="courts" element={<AdminCourtsPage />} />
                 <Route path="schedule" element={<AdminSchedulePage />} />
+                <Route path="blackouts" element={<AdminBlackoutsPage />} />
                 <Route path="sport-types" element={<AdminSportTypesPage />} />
               </Route>
             </Route>

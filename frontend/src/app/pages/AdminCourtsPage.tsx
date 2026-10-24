@@ -14,6 +14,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Tag,
+  ShieldAlert,
 } from "lucide-react"
 import type { Court } from "@/types/court.types"
 import {
@@ -441,6 +442,15 @@ export function AdminCourtsPage() {
                           >
                             <Clock className="h-3 w-3 text-emerald-600" />
                             <span>Lịch / Slot</span>
+                          </Link>
+
+                          <Link
+                            to={`/admin/blackouts?courtId=${court.id}`}
+                            className="flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-[11px] font-bold text-rose-800 hover:bg-rose-100 transition-colors shadow-2xs"
+                            title="Quản lý lịch chặn sân (Blackout) cho sân này"
+                          >
+                            <ShieldAlert className="h-3 w-3 text-rose-600" />
+                            <span>Blackout</span>
                           </Link>
 
                           <button
