@@ -1,19 +1,26 @@
 # QA S3 - Booking Core & Concurrency (TC-01..TC-13)
-# Chay tren stack docker local. Khong dung cho staging/Neon.
+# Mac dinh chay tren stack docker local. Co the tro sang staging/Neon bang -BaseUrl + -DbUrl.
 # Vi du:
 #   powershell -NoProfile -ExecutionPolicy Bypass -File tests/api/booking-core-qa.ps1
+#   powershell -NoProfile -ExecutionPolicy Bypass -File tests/api/booking-core-qa.ps1 `
+#     -BaseUrl https://sport-booking-api-staging.onrender.com/api/v1 `
+#     -DbUrl   "<STAGING_DATABASE_URL_DIRECT>"
 
 param(
     [string]$BaseUrl   = 'http://localhost:8080/api/v1',
     [string]$Container = 'sportbookingsystem-db-1',
     [string]$DbName    = 'sport_booking',
+    # Neu co -DbUrl thi moi cau SQL chay qua psql tro toi URL nay (dung endpoint DIRECT
+    # cua Neon), thay vi DB local trong $Container. Bat buoc khi test staging, neu khong
+    # HTTP se di staging con SQL lai doc DB local -> ket qua vo nghia.
+    [string]$DbUrl     = '',
     [string]$OutDir    = ''
 )
 
 $ErrorActionPreference = 'Stop'
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+$root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 if (-not $OutDir) {
-    $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
     $OutDir = Join-Path $root "artifacts/tests/booking-qa-$($stamp.Substring(0,8))"
 }
 New-Item -ItemType Directory -Force $OutDir | Out-Null
@@ -21,6 +28,28 @@ New-Item -ItemType Directory -Force $OutDir | Out-Null
 $results = New-Object System.Collections.ArrayList
 $script:pass = 0
 $script:fail = 0
+
+# Xac dinh dich cua cac cau SQL kiem chung va kiem tra som, de khong chay 13 test case
+# roi moi phat hien SQL dang tro sai database.
+if ($DbUrl) {
+    try { $DbUri = [Uri]$DbUrl }
+    catch { throw '-DbUrl khong hop le; khong gui credential len chat.' }
+    if (-not $DbUri.Host.EndsWith('.neon.tech')) {
+        throw '-DbUrl phai tro toi Neon khi test staging.'
+    }
+    if ($DbUri.Host -like '*-pooler*') {
+        throw '-DbUrl phai la endpoint DIRECT (khong co -pooler).'
+    }
+    if ($DbUri.Query -notmatch '(?:^|[?&])sslmode=(require|verify-ca|verify-full)(?:&|$)') {
+        throw '-DbUrl can sslmode=require, verify-ca hoac verify-full.'
+    }
+    $dbLabel = "$($DbUri.Host)$($DbUri.AbsolutePath)"
+}
+else {
+    $dbLabel = "$Container/$DbName"
+}
+Write-Host "API : $BaseUrl"
+Write-Host "DB  : $dbLabel"
 
 function J($o) { $o | ConvertTo-Json -Depth 10 -Compress }
 
@@ -67,7 +96,30 @@ function Add-Result {
 
 function Sql {
     param([string]$Query)
-    $out = docker exec $Container psql -U sport -d $DbName -tAc $Query
+    if ($DbUrl) {
+        # Chay psql trong container local nhung ket noi toi $DbUrl (Neon direct).
+        # Khong truyen connection string hay query tren command line: ca hai di qua
+        # bien moi truong va stdin, tranh bi PowerShell 5.1 lam hong dau nhay.
+        $names = @('PGHOST', 'PGPORT', 'PGUSER', 'PGPASSWORD', 'PGDATABASE', 'PGSSLMODE')
+        $saved = @{}
+        foreach ($n in $names) { $saved[$n] = [Environment]::GetEnvironmentVariable($n, 'Process') }
+        try {
+            $env:PGHOST = $DbUri.Host
+            $env:PGPORT = if ($DbUri.Port -gt 0) { $DbUri.Port } else { 5432 }
+            $sep = $DbUri.UserInfo.IndexOf(':')
+            $env:PGUSER = [Uri]::UnescapeDataString($DbUri.UserInfo.Substring(0, $sep))
+            $env:PGPASSWORD = [Uri]::UnescapeDataString($DbUri.UserInfo.Substring($sep + 1))
+            $env:PGDATABASE = [Uri]::UnescapeDataString($DbUri.AbsolutePath.TrimStart('/'))
+            $env:PGSSLMODE = 'require'
+            $out = $Query | docker exec -i -e PGHOST -e PGPORT -e PGUSER -e PGPASSWORD -e PGDATABASE -e PGSSLMODE $Container psql -tA -f -
+        }
+        finally {
+            foreach ($n in $names) { [Environment]::SetEnvironmentVariable($n, $saved[$n], 'Process') }
+        }
+    }
+    else {
+        $out = docker exec $Container psql -U sport -d $DbName -tAc $Query
+    }
     return ($out | Out-String).Trim()
 }
 
@@ -125,6 +177,12 @@ function Invoke-Parallel {
 
 # ---------------------------------------------------------------- setup
 Write-Host "== Setup (TC-01) =="
+
+# Kiem tra som: SQL phai doc duoc dung database truoc khi chay 13 test case.
+if (-not (Sql 'select 1')) {
+    throw "Khong ket noi duoc database $dbLabel. Kiem tra -DbUrl hoac container $Container."
+}
+
 $today = (Get-Date).Date
 function D([int]$offset) { return $today.AddDays($offset).ToString('yyyy-MM-dd') }
 
@@ -438,7 +496,7 @@ Commit : $(git -C $root rev-parse HEAD)
 Branch : $(git -C $root rev-parse --abbrev-ref HEAD)
 Go     : $(go version)
 Base   : $BaseUrl
-DB     : $Container/$DbName
+DB     : $dbLabel
 Run    : $(Get-Date -Format o)
 Result : $($script:pass) PASS / $($script:fail) FAIL
 "@ | Out-File -Encoding utf8 (Join-Path $OutDir 'environment.txt')
