@@ -69,7 +69,8 @@ Không dùng keep-alive để coi Free tier là SLA.
 |---|---|
 | 1. Kiểm tra cấu hình backend Render, ghi hạn chế/dự phòng | **Xong bằng tài liệu này** |
 | 2. Neon PostgreSQL/TLS + DB staging riêng | **Xong** — xem §7 |
-| 3–10 | Chưa |
+| 7. Thiết lập migration step khi deploy | **Cơ chế đã có và đã kiểm chứng** — xem §7.2 |
+| 3–6, 8–10 | Chưa |
 
 ## 7. Nhật ký thực hiện
 
@@ -104,4 +105,31 @@ Không dùng keep-alive để coi Free tier là SLA.
 ### Còn lại của mục 2
 
 - [ ] Reset dữ liệu staging bằng fixture có version trước S5/UAT (chưa làm, cố ý trì hoãn)
+
+### 7.2. Mục 7 — cơ chế chạy migration
+
+Kế hoạch online §3.3 cấm để API tự chạy Goose lúc khởi động và Render Free không có one-off job. Cơ chế được chọn: **chạy có kiểm soát từ máy DevOps**, đóng gói trong script để không phải nhớ lệnh.
+
+```powershell
+# chỉ đọc trạng thái
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev/Invoke-StagingMigration.ps1 -Command status
+
+# áp dụng migration còn thiếu
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev/Invoke-StagingMigration.ps1 -Command up
+```
+
+Đặc điểm:
+
+- Dùng đúng image `ghcr.io/kukymbr/goose-docker:3.24.0` như `docker-compose.yml`, nên không cần cài Goose trên máy và không lệch phiên bản giữa local với staging.
+- Đọc `STAGING_DATABASE_URL_DIRECT` từ `backend/.env.staging`; **từ chối chạy** nếu URL không phải Neon, không có `sslmode=require`, hoặc là endpoint `-pooler`.
+- Secret truyền qua biến môi trường của tiến trình (`docker run -e GOOSE_DBSTRING`), không đặt trên command line, nên không lộ trong danh sách tiến trình.
+- Chưa tự động hoá trong pipeline — đúng như kế hoạch yêu cầu, vì Render Free không có one-off job và nhiều instance chạy Goose đồng thời sẽ hỏng.
+
+**Đã kiểm chứng 25/10/2026:**
+
+| Kiểm tra | Kết quả |
+|---|---|
+| `-Command status` trên branch staging | `no migrations to run. current version: 11`, exit 0 |
+| Chặn endpoint pooled | Từ chối với thông báo `Dang dung endpoint pooled (-pooler)` |
+
 
