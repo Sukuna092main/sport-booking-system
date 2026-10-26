@@ -224,6 +224,21 @@ Sau khi seed, script tự kiểm tra: 3 sport type, 6 court, 3 user, 588 `time_s
 4. Chỉ khi đã ổn mới chạy trên `staging` với `-ConfirmStaging`.
 5. Thông báo cho nhóm trước khi reset. **Không reset trong regression S5 hoặc UAT S6.**
 
+### Kết quả diễn tập 26/10/2026
+
+Diễn tập trên branch tạm `fixture-rehearsal` (`ep-gentle-paper-b3b76ufy`, auto-delete 1 ngày), với backend local chạy ở `:8081` trỏ vào branch đó. Staging **không bị chạm** (kiểm tra lại sau: vẫn 16 court, 35 user).
+
+Kết quả seed: **3 sport type, 6 court, 672 `time_slots`, 3 user, đúng 1 ADMIN**, goose vẫn 11. Availability trả 16 slot/ngày, tất cả available. Tên tiếng Việt lưu đúng (`Cầu lông`, `Bóng đá`).
+
+**Vì sao phải dựng backend local:** script reset DB qua SQL nhưng seed qua **API**. Trên branch tạm không có backend nào trỏ vào, nên nếu dùng API staging thì dữ liệu sẽ ghi vào staging chứ không ghi vào branch. Cách đúng là chạy `Start-BackendNeon.ps1 -EnvFile backend/.env.rehearsal` với `HTTP_ADDR=:8081` (tránh trùng cổng 8080 của backend Docker), rồi truyền `-ApiBaseUrl http://localhost:8081/api/v1`.
+
+**Hai lỗi phát hiện trong diễn tập — cả hai đều là lỗi của script, không phải của sản phẩm:**
+
+1. **Encoding tiếng Việt.** `Invoke-WebRequest` với body là string bị PowerShell 5.1 mã hoá theo ANSI, ký tự tiếng Việt thành `?` → DB lưu `C?u l�ng`. Sửa bằng cách gửi **byte UTF-8** kèm `charset=utf-8`. Đã thêm kiểm tra tự động: đếm sport type có tên chứa `?`, phải bằng 0.
+2. **Kỳ vọng số slot sai.** Fixture đặt 06:00–22:00 = 16 slot/ngày → 112 mẫu tuần mỗi sân, không phải 98 (98 là của khung 08:00–22:00). Đã đổi sang tính từ cấu hình giờ thay vì hardcode.
+
+**Giới hạn của guard:** pre-flight so sánh số court giữa DB và API **không phát hiện được** trường hợp branch vừa clone, vì dữ liệu hai bên giống hệt nhau nên vẫn khớp. Chốt chặn thật là kiểm tra **sau** truncate: nếu API vẫn trả court trong khi DB đã về 0 thì dừng trước khi seed. Trong diễn tập, chốt này đã hoạt động đúng — chặn được việc seed vào staging.
+
 ## 9. Giới hạn
 
 1. **Reconnect đã kiểm chứng nhưng chưa chứng minh được Neon thực sự đã suspend.** Kết quả 200 sau 7 phút idle và mức tăng ~1.1s phù hợp với việc wake compute, nhưng từ phía client không có cách xác nhận trạng thái suspend. Muốn chắc chắn thì cần xem dashboard Neon hoặc log của Neon tại đúng thời điểm đo.
