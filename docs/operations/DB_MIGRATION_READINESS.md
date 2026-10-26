@@ -239,6 +239,14 @@ Kết quả seed: **3 sport type, 6 court, 672 `time_slots`, 3 user, đúng 1 AD
 
 **Giới hạn của guard:** pre-flight so sánh số court giữa DB và API **không phát hiện được** trường hợp branch vừa clone, vì dữ liệu hai bên giống hệt nhau nên vẫn khớp. Chốt chặn thật là kiểm tra **sau** truncate: nếu API vẫn trả court trong khi DB đã về 0 thì dừng trước khi seed. Trong diễn tập, chốt này đã hoạt động đúng — chặn được việc seed vào staging.
 
+### Quyết định: chưa áp dụng lên staging
+
+Ngày 26/10, sau khi diễn tập thành công, nhóm quyết định **không reset staging ở thời điểm này**. Lý do: staging đang được dùng để kiểm thử và reset sẽ xoá toàn bộ dữ liệu hiện có (33 booking, 16 court, 35 user, gồm cả tài khoản `qa-s4-admin` / `qa-s4-user` mà collection Postman đang dùng).
+
+Trạng thái: fixture v1 đã sẵn sàng và đã chứng minh chạy đúng, nhưng **chưa áp dụng**. Việc reset sẽ thực hiện trước regression S5, khi có cửa sổ thời gian và đã thông báo nhóm — không phải việc bị bỏ quên.
+
+Vì vậy mục 4 của checklist #98 ("test data đúng version") vẫn để mở, không tick.
+
 ## 9. Giới hạn
 
 1. **Reconnect đã kiểm chứng nhưng chưa chứng minh được Neon thực sự đã suspend.** Kết quả 200 sau 7 phút idle và mức tăng ~1.1s phù hợp với việc wake compute, nhưng từ phía client không có cách xác nhận trạng thái suspend. Muốn chắc chắn thì cần xem dashboard Neon hoặc log của Neon tại đúng thời điểm đo.
