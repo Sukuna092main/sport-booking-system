@@ -159,21 +159,74 @@ docker exec sportbookingsystem-db-1 psql -U sport -d sport_booking -c "DROP DATA
 2. **`-v` với đường dẫn Windows có dấu cách mount rỗng.** Repo nằm ở `C:/Users/hello/Sport Booking System`, mount bằng `-v` cho container thấy `/migrations` trống → `goose run: no migration files found`. Dùng `--mount type=bind` thì đúng.
 3. **Thiếu `GOOSE_MIGRATION_DIR=/migrations` cũng gây lỗi trên.** Đặt tường minh cho chắc.
 
-## 8. Giới hạn
+## 8. Fixture có version
+
+Staging hiện **không có dữ liệu nền** — mọi thứ là rác do các lượt test sinh ra:
+
+| Hạng mục | Tổng | Là dữ liệu QA |
+|---|---|---|
+| `sport_types` | 11 | 11 (100%) |
+| `courts` | 16 | 16 (100%), chỉ 8 active |
+| `users` | 35 | 31 |
+| `bookings` | 33 | — |
+| `audit_logs` | 95 | — |
+
+Hệ quả: con số thay đổi sau mỗi lượt chạy (đã từng quan sát `courts total` = 2, rồi 5, rồi 8 active), nên **không thể viết assertion về số lượng** và regression S5 sẽ không so sánh được giữa các lượt.
+
+### Vì sao reset bằng SQL nhưng seed bằng API
+
+- **Reset buộc phải SQL**: không có API xoá hàng loạt.
+- **Seed buộc phải API**: mẫu `time_slots` (98 mẫu tuần cho một sân) được sinh trong `backend/internal/Admin/schedule/service.go`; `00006_time_slots.sql` có **0 trigger, 0 function**. Nếu `INSERT INTO courts` bằng SQL thì court có nhưng `time_slots` rỗng → `GET /courts/{id}/availability` trả `slots: []` và rất dễ bị hiểu nhầm là bug.
+- Mật khẩu là **bcrypt** (`Auth/service.go:77`). Có thể giả lập bằng pgcrypto nhưng phụ thuộc ngầm vào thuật toán; register qua API thì luôn khớp.
+
+### `scripts/dev/Reset-StagingFixture.ps1` — fixture v1
+
+An toàn mặc định:
+
+| Cơ chế | Hành vi |
+|---|---|
+| Mặc định | **Dry run** — chỉ in hiện trạng và việc sẽ làm, không xoá gì |
+| `-Execute` | Mới thực sự xoá và ghi |
+| `-ConfirmStaging` | Bắt buộc nếu `-DbUrl` trỏ tới endpoint staging thật |
+| `-DbUrl` | Bắt buộc truyền tay, **không** tự đọc `backend/.env.staging` |
+| Guard | Từ chối nếu không phải Neon, thiếu `sslmode=require`, hoặc là endpoint `-pooler` |
+| Bảo toàn | Không xoá `goose_db_version` |
+
+Nội dung fixture v1:
+
+| Thành phần | Giá trị |
+|---|---|
+| Sport types | Cầu lông, Tennis, Bóng đá |
+| Courts | `CL-01`, `CL-02`, `TN-01`, `TN-02`, `BD-01`, `BD-02` |
+| Operating hours | 06:00–22:00 cả 7 ngày → 14 slot/ngày × 7 = **98 mẫu/sân**, tổng 588 |
+| Tài khoản | `fixture-admin@example.test` (ADMIN), `fixture-user1/user2@example.test` (USER) |
+| Mật khẩu | tham số `-FixturePassword`, mặc định `password123` |
+
+Sau khi seed, script tự kiểm tra: 3 sport type, 6 court, 3 user, 588 `time_slots`, đúng 1 ADMIN. Sai chỉ tiêu nào thì dừng với lỗi rõ ràng.
+
+### Quy trình khuyến nghị
+
+1. Tạo Neon branch tạm từ `staging` (ví dụ `fixture-rehearsal`).
+2. Chạy script với `-DbUrl` của branch tạm, có `-Execute`.
+3. Kiểm tra kết quả, sau đó **xoá branch tạm**.
+4. Chỉ khi đã ổn mới chạy trên `staging` với `-ConfirmStaging`.
+5. Thông báo cho nhóm trước khi reset. **Không reset trong regression S5 hoặc UAT S6.**
+
+## 9. Giới hạn
 
 1. **Reconnect đã kiểm chứng nhưng chưa chứng minh được Neon thực sự đã suspend.** Kết quả 200 sau 7 phút idle và mức tăng ~1.1s phù hợp với việc wake compute, nhưng từ phía client không có cách xác nhận trạng thái suspend. Muốn chắc chắn thì cần xem dashboard Neon hoặc log của Neon tại đúng thời điểm đo.
 2. **Chưa test migration trên dữ liệu thật.** Down chạy trên DB trống; hành vi khi có dữ liệu (đặc biệt migration có `DROP COLUMN`) chưa được kiểm chứng.
 3. **Chưa có backup/restore.** Thuộc thẻ #102 [DEVOPS] Backup / Restore Readiness (S6).
 4. **Staging đang tích luỹ dữ liệu QA** từ các lượt chạy trước (nhiều sport type / court tiền tố `QA-`). Cần reset bằng fixture có version trước regression S5.
 
-## 9. Đối chiếu checklist #98
+## 10. Đối chiếu checklist #98
 
 | # | Mục | Trạng thái |
 |---|---|---|
 | 1 | Migration forward | **Xong** — 11/11, version 11 |
 | 2 | Rollback/recovery procedure | **Xong** — down-to 0 → up, hội tụ đúng schema |
 | 3 | Constraint/index integrity | **Xong** — 8/8 hạng mục khớp staging, không drift |
-| 4 | Staging schema/test data đúng version | **Một phần** — schema đúng version 11; test data chưa chuẩn hoá (còn dữ liệu QA) |
+| 4 | Staging schema/test data đúng version | **Một phần** — schema đúng version 11; fixture v1 đã viết sẵn nhưng **chưa chạy reset**, staging vẫn là dữ liệu QA tích luỹ |
 | Online 1 | Schema Audit/Admin Booking và staging/CI sẵn sàng | **Một phần** — staging sẵn sàng; bảng audit/booking đã có nhưng chưa audit nội dung dữ liệu |
 | Online 2 | TLS/pool/timeout/reconnect, migration/rollback trên DB riêng | **Xong** — TLS/pool/timeout đo được, reconnect sau 7 phút idle trả 200, migration/rollback chạy trên DB kiểm chứng riêng |
 | Online 3 | Ghi schema/config/quyền/fixture, Huy review | **Một phần** — tài liệu này; fixture chưa chốt; Huy chưa review |
