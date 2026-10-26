@@ -1,0 +1,23 @@
+$kind: http-request
+name: Court / PATCH đổi tên
+url: "{{baseUrl}}/admin/courts/{{courtId}}"
+method: PATCH
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "name": "QA S4 Court {{runId}} renamed"
+    }
+auth:
+  type: bearer
+  credentials:
+    token: "{{adminToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Patch 200', () => pm.response.to.have.status(200));
+      pm.test('Ten da doi', () => pm.expect(pm.response.json().data.name).to.include('renamed'));
+    language: text/javascript
+order: 5000

@@ -1,0 +1,56 @@
+$kind: collection
+name: Admin Court / Schedule / Blackout — QA Sprint 4
+description: |-
+  Collection kiểm thử thẻ #94 [QA] Admin Court / Schedule / Blackout Test.
+
+  Chạy theo thứ tự bằng Collection Runner. Mặc định trỏ staging:
+  https://sport-booking-api-staging.onrender.com/api/v1
+
+  TRƯỚC KHI CHẠY, cần có 1 tài khoản ADMIN trên staging:
+  1. Đăng ký qua API (hoặc dùng request Setup / Register USER).
+  2. Promote bằng SQL trên Neon branch staging:
+     UPDATE users SET role='ADMIN' WHERE email='<email>';
+  3. Điền biến adminEmail / adminPassword trong collection variables.
+
+  Postman không tự promote được ADMIN vì việc đó cần ghi trực tiếp DB.
+
+  Ghi chú contract (từ openapi.yaml):
+  - DELETE /admin/courts/{id} là xoá mềm: isActive=false, trả 204, booking đã xác nhận vẫn giữ.
+  - DELETE /admin/sport-types/{id} trả 409 nếu còn sân đang hoạt động thuộc loại đó.
+  - PUT operating-hours thay thế toàn bộ tuần; opensAt/closesAt phải đúng HH:mm:ss.
+  - weekday theo ISO: 1 = thứ Hai … 7 = Chủ Nhật.
+variables:
+  baseUrl: https://sport-booking-api-staging.onrender.com/api/v1
+  adminEmail: qa-s4-admin@example.test
+  adminPassword: password123
+  userEmail: qa-s4-user@example.test
+  userPassword: password123
+  runId: ""
+  date1: ""
+  blackoutStart: ""
+  blackoutEnd: ""
+  adminToken: ""
+  userToken: ""
+  sportTypeId: ""
+  courtId: ""
+  blackoutId: ""
+  bookingId: ""
+  slotId: ""
+scripts:
+  - type: http:beforeRequest
+    code: |-
+      // Moi lan chay sinh mot runId moi de ten/code khong trung giua cac lan.
+      if (!pm.collectionVariables.get('runId')) {
+        pm.collectionVariables.set('runId', Date.now().toString(36));
+      }
+      // date1 = hom nay + 3 ngay, nam trong cua so [hom nay, +30].
+      if (!pm.collectionVariables.get('date1')) {
+        const d = new Date();
+        d.setDate(d.getDate() + 3);
+        const iso = d.toISOString().slice(0, 10);
+        pm.collectionVariables.set('date1', iso);
+        // 10:00-11:00 gio Viet Nam (UTC+7) = 03:00-04:00Z
+        pm.collectionVariables.set('blackoutStart', iso + 'T03:00:00Z');
+        pm.collectionVariables.set('blackoutEnd', iso + 'T04:00:00Z');
+      }
+    language: text/javascript
