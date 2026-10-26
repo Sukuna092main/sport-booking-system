@@ -41,7 +41,7 @@ Collection có **6 folder, 24 request**, mỗi request kèm test tự động. P
 | # | Mục | Kết quả | Bằng chứng |
 |---|---|---|---|
 | 1 | CRUD / role / validation | **PASS** | USER → 403 `forbidden`; không token → 401; thiếu `name` → 400 `validation_error`; trùng `code` → 409; xoá sport type còn sân active → 409 `conflict` |
-| 2 | Schedule / blackout | **PASS** | PUT operating-hours → 200, sinh **14** mẫu slot cho khung 08:00–22:00; `opensAt` sai format (`8:00`) → 400 `validation_error`; tạo blackout → 201; PATCH → 200; xoá mềm → 204 |
+| 2 | Schedule / blackout | **PASS** | PUT operating-hours → 200, sinh **98** mẫu slot tuần (14 slot/ngày × 7 ngày) cho khung 08:00–22:00; `opensAt` sai format (`8:00`) → 400 `validation_error`; tạo blackout → 201; PATCH → 200; xoá mềm → 204 |
 | 3 | Availability phản ánh thay đổi | **PASS** | Trước blackout slot 10:00 `available=true`; sau blackout `available=false`; bỏ blackout `available=true` |
 | 4 | Confirmed booking không bị xoá | **PASS** | Tạo booking → 201 `CONFIRMED`; xoá mềm court → 204; đọc lại booking → 200 `CONFIRMED`; đặt mới trên sân inactive → 422 `booking_rule_violation` |
 
@@ -67,6 +67,7 @@ Một sai lệch **không phải bug**, ghi lại để tránh hiểu nhầm khi
 1. **Chỉ mức API.** Chưa kiểm thử UI admin trên trình duyệt (form nhập, thông báo lỗi, phân trang). Nếu cần thì bổ sung ở S5 regression.
 2. **Chưa có fixture có version.** Staging đang dùng snapshot dev thừa hưởng từ lúc tạo branch; dữ liệu QA do collection tạo thêm sẽ còn lại trên staging cho tới lần reset trước S5.
 3. **Render Free ngủ sau ~15 phút.** Request đầu tiên trong một lượt chạy có thể chậm ~50 giây; không phải lỗi API.
+4. **Collection dùng tài khoản USER cố định nên không chạy lặp vô hạn được.** Hệ thống giới hạn **3 booking active/user**; sau 3 lượt chạy, folder 5 sẽ nhận 422 `booking_rule_violation` — đúng luật nghiệp vụ, không phải lỗi. Trước khi chạy lại: huỷ booking cũ của `qa-s4-user@example.test`, hoặc đổi `userEmail` sang account mới. Bản chạy regression ngày 26/10 dùng user sinh riêng cho từng lượt nên không gặp vấn đề này.
 
 ## Đối chiếu checklist thẻ
 
