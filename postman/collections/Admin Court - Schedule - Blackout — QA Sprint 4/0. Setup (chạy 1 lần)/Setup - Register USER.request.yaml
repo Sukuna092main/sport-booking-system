@@ -1,0 +1,21 @@
+$kind: http-request
+name: Setup / Register USER
+url: "{{baseUrl}}/auth/register"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "email": "{{userEmail}}",
+      "password": "{{userPassword}}",
+      "fullName": "QA S4 User"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      // 201 lan dau, 409 neu da ton tai - ca hai deu chap nhan de collection chay lai duoc.
+      pm.test('Tao duoc hoac da ton tai', () => pm.expect([201, 409]).to.include(pm.response.code));
+    language: text/javascript
+order: 1000

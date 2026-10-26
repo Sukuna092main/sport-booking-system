@@ -15,7 +15,7 @@ func CORS(origins []string) gin.HandlerFunc {
 		allowedOrigins[origin] = true
 	}
 	methods := map[string]bool{"GET": true, "HEAD": true, "POST": true, "PUT": true, "PATCH": true, "DELETE": true}
-	headers := map[string]bool{"authorization": true, "content-type": true, "accept": true, "x-request-id": true}
+	headers := map[string]bool{"authorization": true, "content-type": true, "accept": true, "x-request-id": true, "idempotency-key": true}
 	return func(c *gin.Context) {
 		addVary(c.Writer.Header(), "Origin")
 		originValues := c.Request.Header.Values("Origin")
@@ -52,7 +52,7 @@ func CORS(origins []string) gin.HandlerFunc {
 			}
 			c.Header("Access-Control-Allow-Origin", origin)
 			c.Header("Access-Control-Allow-Methods", "GET, HEAD, POST, PUT, PATCH, DELETE")
-			c.Header("Access-Control-Allow-Headers", "Authorization, Content-Type, Accept, X-Request-ID")
+			c.Header("Access-Control-Allow-Headers", "Authorization, Content-Type, Accept, X-Request-ID, Idempotency-Key")
 			c.Header("Access-Control-Max-Age", "600")
 			c.AbortWithStatus(http.StatusNoContent)
 			return

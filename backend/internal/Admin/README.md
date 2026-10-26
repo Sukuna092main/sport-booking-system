@@ -1,7 +1,9 @@
 # Admin
 
-**Truy vết:** FR-15..18; WBS 1.3.4,1.3.5.
+Routes under `/api/v1/admin` require Authenticate and RequireRole ADMIN.
 
-Đăng ký route/guard ADMIN và các thao tác quản trị Booking/Court/Schedule/Blackout theo contract. Tái sử dụng service của module nghiệp vụ, không nhân đôi repository/business logic. Basic Statistics ở `statistics/`.
+- `inventory`: SportType/Court CRUD, soft deletion, references and slot policy updates.
+- `schedule`: operating hours, TimeSlot regeneration and blackout management.
+- `bookings`: cross-owner booking search/detail, reason-required cancellation and date-based statistics.
 
-Khi triển khai: chia trách nhiệm handler/service/repository/model/DTO theo design đã review, đặt unit tests cạnh code. Chưa có implementation trong scaffold này.
+Mutations and audit commit atomically. Schedule and booking writers share court row locks. No hard deletes or automatic cancellation of existing bookings. See original implementation guide chapters13–14 and OpenAPI0.5.0.

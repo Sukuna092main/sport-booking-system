@@ -1,0 +1,9 @@
+$kind: http-request
+name: Role / Không token
+url: "{{baseUrl}}/admin/courts"
+method: GET
+scripts:
+  - type: afterResponse
+    code: pm.test('Khong token phai 401', () => pm.response.to.have.status(401));
+    language: text/javascript
+order: 2000

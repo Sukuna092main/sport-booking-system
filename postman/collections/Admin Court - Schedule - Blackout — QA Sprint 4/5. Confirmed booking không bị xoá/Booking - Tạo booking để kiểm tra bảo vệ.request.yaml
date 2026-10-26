@@ -1,0 +1,39 @@
+$kind: http-request
+name: Booking / Tạo booking để kiểm tra bảo vệ
+url: "{{baseUrl}}/bookings"
+method: POST
+headers:
+  Content-Type: application/json
+  Idempotency-Key: qa-s4-{{runId}}-booking
+body:
+  type: json
+  content: |-
+    {
+      "courtId": "{{courtId}}",
+      "bookingDate": "{{date1}}",
+      "timeSlotIds": ["{{slotId}}"]
+    }
+auth:
+  type: bearer
+  credentials:
+    token: "{{userToken}}"
+scripts:
+  - type: beforeRequest
+    code: |-
+      // Lay slot 08:00 gio VN (01:00Z) de dat.
+      const url = pm.variables.replaceIn('{{baseUrl}}/courts/{{courtId}}/availability?date={{date1}}');
+      pm.sendRequest({ url: url, method: 'GET' }, (err, res) => {
+        if (err) { return; }
+        const slots = res.json().data.slots;
+        const s8 = slots.filter(s => new Date(s.startsAt).getUTCHours() === 1 && s.available);
+        if (s8.length) { pm.collectionVariables.set('slotId', s8[0].id); }
+      });
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      pm.test('Tao booking 201', () => pm.response.to.have.status(201));
+      const b = pm.response.json();
+      pm.collectionVariables.set('bookingId', b.data.id);
+      pm.test('Booking CONFIRMED', () => pm.expect(b.data.status).to.eql('CONFIRMED'));
+    language: text/javascript
+order: 1000

@@ -82,3 +82,53 @@ export interface CourtsQueryParams {
   page?: number
   pageSize?: number
 }
+
+/* ── Admin Write & Query Payloads (OpenAPI 0.5.0) ── */
+
+export interface SportTypeResponse {
+  data: SportType
+}
+
+export interface SportTypeWrite {
+  name: string
+  description?: string | null
+  isActive?: boolean
+}
+
+export interface SportTypePatch {
+  name?: string
+  description?: string | null
+  isActive?: boolean
+}
+
+export interface CourtWrite {
+  sportTypeId: string
+  code: string
+  name: string
+  description?: string | null
+  isActive?: boolean
+  slotDurationMinutes?: number
+  minConsecutiveSlots?: number
+  maxConsecutiveSlots?: number
+  referencePriceAmount?: string | null
+  referencePriceCurrency?: string | null
+}
+
+export interface CourtPatch {
+  sportTypeId?: string
+  code?: string
+  name?: string
+  description?: string | null
+  isActive?: boolean
+  slotDurationMinutes?: number
+  minConsecutiveSlots?: number
+  maxConsecutiveSlots?: number
+  referencePriceAmount?: string | null
+  referencePriceCurrency?: string | null
+}
+
+export interface AdminCourtQueryParams {
+  page?: number
+  pageSize?: number
+}
+
