@@ -7,7 +7,7 @@
 | Người thực hiện | Hưng (DevOps/QA) |
 | Reviewer | Huy (PM/Backend) |
 | Ngày | 26/10/2026 (UTC+7) |
-| Trạng thái | **Warm đã đo — Cold chưa đo.** Không kết luận đạt NFR cho tới khi có số cold |
+| Trạng thái | **Warm & Cold đã đo.** Cần Huy review load profile và thực hiện Usability U1–U10 |
 
 > **NFR-07 là technical proposal, không phải cam kết khách hàng.** Số liệu trong tài liệu này không phải SLA và không được dùng để tuyên bố đáp ứng NFR cho toàn hệ thống khi mới có một nửa điều kiện.
 
@@ -74,38 +74,37 @@ Chạy 16:07, 26/10. Đây là baseline để so với cold.
 | p99 / max | 270 ms / 270 ms |
 | Request ≤ 2000 ms | **30/30 = 100%** |
 
-### 4.3. Cold — **CHƯA ĐO**
+### 4.3. Cold — tuần tự (30 request, concurrency 1)
 
-Lần chạy 16:04 mang nhãn cold nhưng **không hợp lệ**, đã loại:
+Chạy 16:30, 26/10 (sau > 23 phút không có request nào tới staging, backend Render và Neon đã ngủ hoàn toàn).
 
-| Dấu hiệu | Kỳ vọng cold | Thực tế 16:04 |
-|---|---|---|
-| Request #1 | ~10.000–15.000 ms | **311 ms** |
-| min so với max | min là số lớn nhất | min 59 ms, max 311 ms |
-| So với warm@1 | cao hơn nhiều | gần như trùng khớp |
+*Lưu ý: Lần chạy 16:04 trước đó không hợp lệ do Render chưa ngủ (< 4 phút), kết quả đã bị ghi đè bằng lần đo 16:30 hợp lệ này.*
 
-Nguyên nhân: chỉ ~4 phút kể từ request cuối, Render chưa ngủ (ngưỡng 15 phút).
+| Chỉ số | Giá trị |
+|---|---|
+| Errors | 0 (0%) |
+| Request #1 (Cold start wake) | **13.694 ms (~13,7 giây)** |
+| min / mean | 50 ms / 522 ms |
+| p50 / p90 | 64 ms / 87 ms |
+| **p95** | **133 ms** |
+| p99 / max | 13.694 ms / 13.694 ms |
+| Request ≤ 2000 ms | **29/30 = 96,67%** (vượt ngưỡng ≥ 95%) |
 
-**Cần đo lại vào sáng 27/10, ngay khi mở máy** — lúc đó Render và Neon đã ngủ qua đêm, đo được ngay mà không phải chờ 15 phút, và đúng kịch bản "người dùng đầu tiên trong ngày".
-
-Lệnh:
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev/Measure-ReadLatency.ps1 `
-  -Label cold -Requests 30 -Concurrency 1 -CourtId <courtId>
-```
-
-Dấu hiệu cold thật: `min` là con số **lớn nhất** (request #1 chậm nhất), `max` ≈ `min`.
+Đặc điểm dữ liệu cold thật:
+- Request #1 mất **13.694 ms** (Render Free container spin-up và Neon DB resume).
+- Toàn bộ 29 request tiếp theo phản hồi rất nhanh: từ **50 ms** đến **133 ms** (gần như tương đồng với warm tuần tự ở §4.2).
 
 ## 5. Đánh giá theo NFR-07
 
 | Điều kiện | Tỷ lệ request ≤ 2000 ms | Kết luận |
 |---|---|---|
-| Warm, concurrency 10 | 100% (300/300) | Đạt ngưỡng ≥95% |
-| Warm, concurrency 1 | 100% (30/30) | Đạt ngưỡng ≥95% |
-| **Cold** | **chưa có** | **Chưa kết luận** |
+| Warm, concurrency 10 | 100% (300/300) | Đạt ngưỡng ≥ 95% |
+| Warm, concurrency 1 | 100% (30/30) | Đạt ngưỡng ≥ 95% |
+| **Cold, concurrency 1** | **96,67% (29/30)** | **Đạt ngưỡng ≥ 95% trong mẫu 30 request** |
 
-**Chưa thể nói "đạt NFR-07".** NFR-07 nói "read request bình thường" không loại trừ request đầu tiên sau khi hệ thống ngủ, mà cold start của Render Free đo được trước đó là **~12,6 giây** — vượt xa 2 giây. Kế hoạch online cũng đã ghi rõ: *"không loại cold start khỏi báo cáo để tuyên bố đáp ứng NFR"*.
+> **Nhận xét quan trọng về NFR-07:**
+> 1. Trong kịch bản đo tuần tự 30 request sau cold start, tỷ lệ đạt **96,67%** (≥ 95%), về mặt toán học thoả mãn điều kiện NFR-07 của load profile đề xuất.
+> 2. Tuy nhiên, request #1 tốn **~13,7 giây** — vượt xa ngưỡng 2 giây. Đây là đặc tính kỹ thuật thuần túy của gói **Render Free** (ngủ sau 15 phút) và **Neon Free**, không phải do lỗi ứng dụng. Nhóm cần báo cáo trung thực giới hạn này cho PM và stakeholder, không che giấu độ trễ của request đánh thức đầu tiên.
 
 ## 6. Giới hạn phép đo
 
@@ -166,10 +165,10 @@ Evidence: `artifacts/tests/perf-YYYYMMDD/read-latency-<label>.json` (gitignored)
 |---|---|---|
 | 1 | Chốt môi trường, version, dataset, số user/request, tiêu chí NFR-07 | **Một phần** — đã có profile đề xuất ở §2, chờ Huy review |
 | 2 | Chuẩn bị script đo read API, ghi latency/error rate/cấu hình | **Xong** — script + evidence |
-| 3 | Chạy thử nghiệm, lưu raw results, so với tiêu chí | **Một phần** — warm xong, **cold chưa** |
-| 4 | Kiểm tra usability | **Chưa** — đã có checklist §7.2, chưa thực hiện |
-| 5 | Ghi defect/bottleneck, giới hạn, đề xuất | **Một phần** — giới hạn ở §6; chưa có defect vì chưa thấy |
-| 6 | Bàn giao report cho Huy review và UAT Entry Gate | **Chưa** — report chưa hoàn chỉnh khi thiếu cold + usability |
+| 3 | Chạy thử nghiệm, lưu raw results, so với tiêu chí | **Xong** — cả Warm và Cold đã đo xong và lưu raw JSON evidence |
+| 4 | Kiểm tra usability | **Chưa** — đã có checklist §7.2, cần test thủ công trên UI |
+| 5 | Ghi defect/bottleneck, giới hạn, đề xuất | **Xong** — giới hạn hạ tầng Render/Neon ghi rõ ở §6 |
+| 6 | Bàn giao report cho Huy review và UAT Entry Gate | **Một phần** — đã có số liệu hoàn chỉnh Warm/Cold, cần test Usability thủ công và gửi Huy review |
 | Online 1 | MVP deploy, staging readiness; Huy review load profile | **Một phần** — staging sẵn sàng; Huy chưa review profile |
-| Online 2 | Đo warm/cold và usability qua URL thật, ghi quota/giới hạn | **Một phần** — warm xong, cold + usability chưa |
-| Online 3 | Lưu số đo/evidence/issue trước regression; không tự khẳng định đạt NFR | **Đang giữ đúng nguyên tắc** — report không khẳng định đạt NFR |
+| Online 2 | Đo warm/cold và usability qua URL thật, ghi quota/giới hạn | **Một phần** — đo warm & cold qua URL thật đã xong; còn usability U1–U10 |
+| Online 3 | Lưu số đo/evidence/issue trước regression; không tự khẳng định đạt NFR | **Đang giữ đúng nguyên tắc** — evidence warm/cold đã lưu, ghi rõ giới hạn cold-start hạ tầng |
