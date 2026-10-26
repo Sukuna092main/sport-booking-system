@@ -18,6 +18,11 @@ param(
     [int]$Concurrency = 10,
     [int]$TimeoutSeconds = 60,
     [string]$OutDir = '',
+    # Truyen san courtId de BO QUA buoc goi API chuan bi.
+    # Rat quan trong khi do COLD: buoc chuan bi cung goi API, nen no se danh thuc
+    # backend truoc khi bat dau do -> request dau tien (cold that) bi tieu mat va
+    # ket qua toan bo la warm.
+    [string]$CourtId = '',
     # Endpoint duoc coi la "read request binh thuong" theo NFR-07.
     [string[]]$Endpoints = @('/courts', '/courts/{id}', '/courts/{id}/availability')
 )
@@ -62,17 +67,22 @@ Write-Host "Requests : $Requests (concurrency $Concurrency)"
 Write-Host "Tieu chi : NFR-07 - >= $TargetPercent% read request <= ${TargetMs}ms"
 Write-Host ''
 
-Write-Host 'Dang lay court id de do endpoint detail/availability...'
-$courtsProbe = Get-Json '/courts'
-if ($courtsProbe.status -ne 200) {
-    throw "GET /courts tra $($courtsProbe.status); khong chuan bi duoc du lieu do."
+if ($CourtId) {
+    Write-Host "Dung courtId chi dinh san: $CourtId (khong goi API chuan bi)"
 }
-$courtId = @($courtsProbe.json.data)[0].id
-if (-not $courtId) {
-    throw 'Khong co court nao de do. Can seed du lieu truoc (xem Reset-StagingFixture.ps1).'
+else {
+    Write-Host 'Dang lay court id de do endpoint detail/availability...'
+    $courtsProbe = Get-Json '/courts'
+    if ($courtsProbe.status -ne 200) {
+        throw "GET /courts tra $($courtsProbe.status); khong chuan bi duoc du lieu do."
+    }
+    $CourtId = @($courtsProbe.json.data)[0].id
+    if (-not $CourtId) {
+        throw 'Khong co court nao de do. Can seed du lieu truoc (xem Reset-StagingFixture.ps1).'
+    }
+    Write-Host "  courtId = $CourtId"
 }
 $date = (Get-Date).Date.AddDays(2).ToString('yyyy-MM-dd')
-Write-Host "  courtId = $courtId"
 Write-Host "  date    = $date"
 Write-Host ''
 
