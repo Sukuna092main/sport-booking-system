@@ -1,0 +1,19 @@
+$kind: http-request
+name: Schedule / GET operating-hours
+url: "{{baseUrl}}/admin/courts/{{courtId}}/operating-hours"
+method: GET
+auth:
+  type: bearer
+  credentials:
+    token: "{{adminToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('GET lich 200', () => pm.response.to.have.status(200));
+      pm.test('Co hours va timeSlots', () => {
+        const b = pm.response.json();
+        pm.expect(b.data).to.have.property('hours');
+        pm.expect(b.data).to.have.property('timeSlots');
+      });
+    language: text/javascript
+order: 3000

@@ -1,0 +1,22 @@
+$kind: http-request
+name: Availability / Slot 10:00 bị chặn bởi blackout
+url: "{{baseUrl}}/courts/{{courtId}}/availability?date={{date1}}"
+method: GET
+queryParams:
+  date: "{{date1}}"
+auth:
+  type: bearer
+  credentials:
+    token: "{{userToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Availability 200', () => pm.response.to.have.status(200));
+      const slots = pm.response.json().data.slots;
+      const at10 = slots.filter(s => new Date(s.startsAt).getUTCHours() === 3);
+      pm.test('Co slot 10:00 gio VN', () => pm.expect(at10.length).to.be.greaterThan(0));
+      pm.test('Slot 10:00 phai available=false', () => {
+        at10.forEach(s => pm.expect(s.available, s.startsAt).to.eql(false));
+      });
+    language: text/javascript
+order: 1000

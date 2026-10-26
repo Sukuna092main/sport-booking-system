@@ -1,0 +1,24 @@
+$kind: http-request
+name: Setup / Login ADMIN
+url: "{{baseUrl}}/auth/login"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "email": "{{adminEmail}}",
+      "password": "{{adminPassword}}"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Dang nhap admin 200', () => pm.response.to.have.status(200));
+      const b = pm.response.json();
+      pm.test('Tai khoan phai co role ADMIN', () => {
+        pm.expect(b.data.user.role).to.eql('ADMIN', 'Chua promote ADMIN bang SQL? Xem mo ta collection.');
+      });
+      pm.collectionVariables.set('adminToken', b.data.accessToken);
+    language: text/javascript
+order: 3000
