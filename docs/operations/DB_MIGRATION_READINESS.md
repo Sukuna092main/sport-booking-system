@@ -102,7 +102,35 @@ So sánh DB vừa migrate từ đầu với staging:
 | Connection pool | `DB_MAX_OPEN_CONNS=10`, `DB_MAX_IDLE_CONNS=5` trên Render; `DB_CONN_MAX_LIFETIME=15m`, `DB_CONN_MAX_IDLE_TIME=5m` |
 | Timeout HTTP | read header 5s, read 10s, write 15s, idle 60s, shutdown 10s |
 | Role | App dùng `app_staging` (không `CREATE` schema, không ghi `goose_db_version`); migration dùng `neondb_owner` qua endpoint direct |
-| Reconnect sau khi Neon auto-suspend | **Chưa kiểm chứng** — cần chờ Neon ngủ (~5 phút idle) rồi đo request đầu |
+| Reconnect sau khi Neon auto-suspend | **Đã kiểm chứng** — xem §6.1 |
+
+### 6.1. Reconnect sau khi idle
+
+Thí nghiệm: đo baseline khi backend đang nóng, để **7 phút không có request nào**, rồi đo lại 3 lần liên tiếp.
+
+| Thời điểm | Lần | Thời gian | HTTP |
+|---|---|---|---|
+| Baseline (đang nóng) | 2 | 0.264s | 200 |
+| Baseline (đang nóng) | 3 | 0.291s | 200 |
+| Sau 7 phút idle | 1 | **1.379s** | **200** |
+| Sau 7 phút idle | 2 | 0.273s | 200 |
+| Sau 7 phút idle | 3 | 0.312s | 200 |
+
+**Kết luận:** request đầu tiên sau 7 phút idle vẫn trả **200**, không lỗi connection. Chênh lệch ~1.1s so với trạng thái nóng là chi phí mở lại connection + đánh thức compute của Neon; các request sau trở về mức nóng.
+
+Lưu ý: con số này **không** phải cold start của Render (12.6s ở lần đo đầu tiên khi backend còn ngủ) — nghĩa là trong thí nghiệm này Render vẫn thức (ngưỡng ngủ 15 phút) và chỉ có đường DB là phải nối lại. Đây đúng là kịch bản cần kiểm chứng.
+
+**Cơ chế trong code** (`backend/internal/platform/database/database.go`):
+
+| Thiết lập | Giá trị | Tác dụng |
+|---|---|---|
+| `connect_timeout` (bổ sung vào DSN nếu thiếu) | 10s | Không treo vô hạn khi Neon đang wake |
+| `SetConnMaxIdleTime` | 5m | Connection nhàn rỗi bị dọn — đây là lý do connection "chết" sau suspend không bị dùng lại |
+| `SetConnMaxLifetime` | 15m | Connection cũ bị đóng và tạo mới định kỳ |
+| `SetMaxOpenConns` / `SetMaxIdleConns` | 10 / 5 | Tránh vượt quota connection của Neon Free |
+| Ping lúc khởi động | 10s timeout | Fail-fast nếu DB không sẵn sàng |
+
+Vì `ConnMaxIdleTime` = 5m nhỏ hơn ngưỡng suspend của Neon, mọi connection đã chết đều bị loại khỏi pool trước khi có request dùng lại. Đây là lý do reconnect hoạt động mà không cần retry logic riêng.
 
 ## 7. Cách tái hiện
 
@@ -133,7 +161,7 @@ docker exec sportbookingsystem-db-1 psql -U sport -d sport_booking -c "DROP DATA
 
 ## 8. Giới hạn
 
-1. **Chưa kiểm chứng reconnect sau Neon auto-suspend.** Đây là rủi ro thật với Render Free: backend ngủ 15 phút, Neon cũng ngủ, request đầu tiên sau đó phải mở lại connection. Cần đo riêng.
+1. **Reconnect đã kiểm chứng nhưng chưa chứng minh được Neon thực sự đã suspend.** Kết quả 200 sau 7 phút idle và mức tăng ~1.1s phù hợp với việc wake compute, nhưng từ phía client không có cách xác nhận trạng thái suspend. Muốn chắc chắn thì cần xem dashboard Neon hoặc log của Neon tại đúng thời điểm đo.
 2. **Chưa test migration trên dữ liệu thật.** Down chạy trên DB trống; hành vi khi có dữ liệu (đặc biệt migration có `DROP COLUMN`) chưa được kiểm chứng.
 3. **Chưa có backup/restore.** Thuộc thẻ #102 [DEVOPS] Backup / Restore Readiness (S6).
 4. **Staging đang tích luỹ dữ liệu QA** từ các lượt chạy trước (nhiều sport type / court tiền tố `QA-`). Cần reset bằng fixture có version trước regression S5.
@@ -147,5 +175,5 @@ docker exec sportbookingsystem-db-1 psql -U sport -d sport_booking -c "DROP DATA
 | 3 | Constraint/index integrity | **Xong** — 8/8 hạng mục khớp staging, không drift |
 | 4 | Staging schema/test data đúng version | **Một phần** — schema đúng version 11; test data chưa chuẩn hoá (còn dữ liệu QA) |
 | Online 1 | Schema Audit/Admin Booking và staging/CI sẵn sàng | **Một phần** — staging sẵn sàng; bảng audit/booking đã có nhưng chưa audit nội dung dữ liệu |
-| Online 2 | TLS/pool/timeout/reconnect, migration/rollback trên DB riêng | **Một phần** — TLS/pool/timeout/migration/rollback xong; **reconnect chưa test** |
+| Online 2 | TLS/pool/timeout/reconnect, migration/rollback trên DB riêng | **Xong** — TLS/pool/timeout đo được, reconnect sau 7 phút idle trả 200, migration/rollback chạy trên DB kiểm chứng riêng |
 | Online 3 | Ghi schema/config/quyền/fixture, Huy review | **Một phần** — tài liệu này; fixture chưa chốt; Huy chưa review |
