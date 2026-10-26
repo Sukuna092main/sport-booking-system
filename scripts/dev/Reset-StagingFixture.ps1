@@ -105,8 +105,12 @@ function Invoke-Api {
     if ($Token) { $headers['Authorization'] = "Bearer $Token" }
     $params = @{ Uri = "$ApiBaseUrl$Path"; Method = $Method; Headers = $headers; UseBasicParsing = $true }
     if ($null -ne $Body) {
-        $params['ContentType'] = 'application/json'
-        $params['Body'] = ($Body | ConvertTo-Json -Depth 8 -Compress)
+        # Gui bang BYTE UTF-8. Neu truyen string, PowerShell 5.1 ma hoa theo ANSI
+        # va thay ky tu tieng Viet bang '?' -> ten luu vao DB bi hong (da gap that:
+        # "C?u l�ng"). ContentType cung phai ghi charset=utf-8.
+        $json = $Body | ConvertTo-Json -Depth 8 -Compress
+        $params['ContentType'] = 'application/json; charset=utf-8'
+        $params['Body'] = [System.Text.Encoding]::UTF8.GetBytes($json)
     }
     try {
         $r = Invoke-WebRequest @params
@@ -176,6 +180,21 @@ if (-not $Execute) {
 # ---------------------------------------------------------------- 2. reset
 
 Write-Host '== 2. Xoa du lieu nghiep vu (giu goose_db_version) =='
+
+# PRE-FLIGHT: API phai dang tro toi dung DB trong -DbUrl. So sanh so court
+# active giua DB va API TRUOC khi xoa bat cu thu gi. Neu lech nghia la
+# -ApiBaseUrl dang noi mot DB khac -> seed se ghi nham cho.
+$dbActive = Invoke-Sql "select count(*) from courts c join sport_types s on s.id=c.sport_type_id where c.is_active and s.is_active;"
+$probe = Invoke-Api 'GET' '/courts' $null $null
+if ($probe.status -ne 200) {
+    throw "GET /courts tra $($probe.status); khong xac minh duoc API dang tro toi dau."
+}
+$apiActive = [int]$probe.json.meta.total
+if ($apiActive -ne [int]$dbActive) {
+    throw "Pre-flight that bai: DB co $dbActive court active nhung API tra $apiActive. -ApiBaseUrl khong tro toi DB trong -DbUrl -> dung lai, chua xoa gi."
+}
+Write-Host "  Pre-flight OK: DB va API cung thay $dbActive court active."
+
 $list = ($truncateTargets -join ', ')
 Invoke-Sql "TRUNCATE TABLE $list RESTART IDENTITY CASCADE;" | Out-Null
 foreach ($t in $truncateTargets) {
@@ -186,6 +205,21 @@ Write-Host '  Da xoa sach 9 bang nghiep vu.'
 
 $schemaVersion = Invoke-Sql 'select max(version_id) from goose_db_version;'
 Write-Host "  goose_db_version van la: $schemaVersion"
+
+# GUARD QUAN TRONG: API phai dang tro toi dung DB vua reset.
+# Neu -DbUrl la mot branch tam ma -ApiBaseUrl van la staging thi viec seed se
+# ghi vao DB cua backend chu khong ghi vao -DbUrl -> vua lam ban staging vua
+# khong seed duoc branch. Kiem tra bang cach goi API ngay sau khi truncate:
+# DB vua reset phai tra 0 court.
+$probe = Invoke-Api 'GET' '/courts' $null $null
+if ($probe.status -ne 200) {
+    throw "GET /courts tra $($probe.status); khong xac minh duoc API dang tro toi dau."
+}
+$apiCourts = @($probe.json.data).Count
+if ($apiCourts -ne 0) {
+    throw "API tra $apiCourts court trong khi DB vua reset ve 0. -ApiBaseUrl dang tro toi mot DB khac -DbUrl. Dung lai de khong seed nham DB."
+}
+Write-Host '  API khop voi DB vua reset (GET /courts = 0).'
 Write-Host ''
 
 # ---------------------------------------------------------------- 3. tai khoan
@@ -219,8 +253,18 @@ foreach ($s in $sportTypes) {
     Write-Host "  sport type '$($s.name)' -> 201"
 }
 
+# So slot tinh tu cau hinh gio, khong hardcode - de sua gio thi ky vong tu doi theo.
+$openHour = 6
+$closeHour = 22
+$slotMinutes = 60
+$slotsPerDay = [int](($closeHour - $openHour) * 60 / $slotMinutes)
+$expectedSlotsPerCourt = $slotsPerDay * 7
+$expectedSlotsTotal = $expectedSlotsPerCourt * $courts.Count
+
 $hours = @()
-foreach ($w in 1..7) { $hours += @{ weekday = $w; opensAt = '06:00:00'; closesAt = '22:00:00' } }
+foreach ($w in 1..7) {
+    $hours += @{ weekday = $w; opensAt = ('{0:D2}:00:00' -f $openHour); closesAt = ('{0:D2}:00:00' -f $closeHour) }
+}
 
 foreach ($c in $courts) {
     $body = @{
@@ -262,8 +306,13 @@ foreach ($ck in $checks) {
 }
 
 $slotTotal = Invoke-Sql 'select count(*) from time_slots;'
-Write-Host ("  time_slots     {0,3} (ky vong 588 = 6 san x 98 mau tuan)" -f $slotTotal)
-if ($slotTotal -ne '588') { $failed++ }
+Write-Host ("  time_slots     {0,3} (ky vong {1} = {2} san x {3} mau tuan)" -f $slotTotal, $expectedSlotsTotal, $courts.Count, $expectedSlotsPerCourt)
+if ($slotTotal -ne [string]$expectedSlotsTotal) { $failed++ }
+
+# Kiem tra encoding: ten tieng Viet phai luu dung, khong bi thay bang '?'.
+$mangled = Invoke-Sql "select count(*) from sport_types where name like '%?%';"
+Write-Host ("  ten bi loi enc {0,3} (ky vong 0)" -f $mangled)
+if ($mangled -ne '0') { $failed++ }
 
 $adminCount = Invoke-Sql "select count(*) from users where role='ADMIN';"
 Write-Host ("  admin accounts {0,3} (ky vong 1)" -f $adminCount)

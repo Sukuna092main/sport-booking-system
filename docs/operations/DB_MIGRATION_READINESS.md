@@ -94,6 +94,18 @@ So sánh DB vừa migrate từ đầu với staging:
 | Số bảng `public` | 10 |
 | Drift so với migration | Không (§4) |
 
+### 5.1. Schema cho Audit và Admin Booking
+
+Hai tính năng mà thẻ #98 nhắc riêng, kiểm tra trực tiếp trên staging:
+
+| Hạng mục | Kết quả |
+|---|---|
+| `audit_logs` cột | `id`, `actor_user_id`, `action`, `entity_type`, `entity_id`, `details` (jsonb), `request_id`, `occurred_at` |
+| `audit_logs` index | `audit_logs_pkey`, `idx_alogs_actor`, `idx_alogs_entity` |
+| `GET /admin/bookings` trên staging | **200** |
+| CI trên `develop` | 5 lượt gần nhất success |
+| Staging | Live, `GET /api/v1/ping` 200 |
+
 ## 6. TLS / pool / timeout
 
 | Hạng mục | Trạng thái |
@@ -212,6 +224,29 @@ Sau khi seed, script tự kiểm tra: 3 sport type, 6 court, 3 user, 588 `time_s
 4. Chỉ khi đã ổn mới chạy trên `staging` với `-ConfirmStaging`.
 5. Thông báo cho nhóm trước khi reset. **Không reset trong regression S5 hoặc UAT S6.**
 
+### Kết quả diễn tập 26/10/2026
+
+Diễn tập trên branch tạm `fixture-rehearsal` (`ep-gentle-paper-b3b76ufy`, auto-delete 1 ngày), với backend local chạy ở `:8081` trỏ vào branch đó. Staging **không bị chạm** (kiểm tra lại sau: vẫn 16 court, 35 user).
+
+Kết quả seed: **3 sport type, 6 court, 672 `time_slots`, 3 user, đúng 1 ADMIN**, goose vẫn 11. Availability trả 16 slot/ngày, tất cả available. Tên tiếng Việt lưu đúng (`Cầu lông`, `Bóng đá`).
+
+**Vì sao phải dựng backend local:** script reset DB qua SQL nhưng seed qua **API**. Trên branch tạm không có backend nào trỏ vào, nên nếu dùng API staging thì dữ liệu sẽ ghi vào staging chứ không ghi vào branch. Cách đúng là chạy `Start-BackendNeon.ps1 -EnvFile backend/.env.rehearsal` với `HTTP_ADDR=:8081` (tránh trùng cổng 8080 của backend Docker), rồi truyền `-ApiBaseUrl http://localhost:8081/api/v1`.
+
+**Hai lỗi phát hiện trong diễn tập — cả hai đều là lỗi của script, không phải của sản phẩm:**
+
+1. **Encoding tiếng Việt.** `Invoke-WebRequest` với body là string bị PowerShell 5.1 mã hoá theo ANSI, ký tự tiếng Việt thành `?` → DB lưu `C?u l�ng`. Sửa bằng cách gửi **byte UTF-8** kèm `charset=utf-8`. Đã thêm kiểm tra tự động: đếm sport type có tên chứa `?`, phải bằng 0.
+2. **Kỳ vọng số slot sai.** Fixture đặt 06:00–22:00 = 16 slot/ngày → 112 mẫu tuần mỗi sân, không phải 98 (98 là của khung 08:00–22:00). Đã đổi sang tính từ cấu hình giờ thay vì hardcode.
+
+**Giới hạn của guard:** pre-flight so sánh số court giữa DB và API **không phát hiện được** trường hợp branch vừa clone, vì dữ liệu hai bên giống hệt nhau nên vẫn khớp. Chốt chặn thật là kiểm tra **sau** truncate: nếu API vẫn trả court trong khi DB đã về 0 thì dừng trước khi seed. Trong diễn tập, chốt này đã hoạt động đúng — chặn được việc seed vào staging.
+
+### Quyết định: chưa áp dụng lên staging
+
+Ngày 26/10, sau khi diễn tập thành công, nhóm quyết định **không reset staging ở thời điểm này**. Lý do: staging đang được dùng để kiểm thử và reset sẽ xoá toàn bộ dữ liệu hiện có (33 booking, 16 court, 35 user, gồm cả tài khoản `qa-s4-admin` / `qa-s4-user` mà collection Postman đang dùng).
+
+Trạng thái: fixture v1 đã sẵn sàng và đã chứng minh chạy đúng, nhưng **chưa áp dụng**. Việc reset sẽ thực hiện trước regression S5, khi có cửa sổ thời gian và đã thông báo nhóm — không phải việc bị bỏ quên.
+
+Vì vậy mục 4 của checklist #98 ("test data đúng version") vẫn để mở, không tick.
+
 ## 9. Giới hạn
 
 1. **Reconnect đã kiểm chứng nhưng chưa chứng minh được Neon thực sự đã suspend.** Kết quả 200 sau 7 phút idle và mức tăng ~1.1s phù hợp với việc wake compute, nhưng từ phía client không có cách xác nhận trạng thái suspend. Muốn chắc chắn thì cần xem dashboard Neon hoặc log của Neon tại đúng thời điểm đo.
@@ -227,6 +262,6 @@ Sau khi seed, script tự kiểm tra: 3 sport type, 6 court, 3 user, 588 `time_s
 | 2 | Rollback/recovery procedure | **Xong** — down-to 0 → up, hội tụ đúng schema |
 | 3 | Constraint/index integrity | **Xong** — 8/8 hạng mục khớp staging, không drift |
 | 4 | Staging schema/test data đúng version | **Một phần** — schema đúng version 11; fixture v1 đã viết sẵn nhưng **chưa chạy reset**, staging vẫn là dữ liệu QA tích luỹ |
-| Online 1 | Schema Audit/Admin Booking và staging/CI sẵn sàng | **Một phần** — staging sẵn sàng; bảng audit/booking đã có nhưng chưa audit nội dung dữ liệu |
+| Online 1 | Schema Audit/Admin Booking và staging/CI sẵn sàng | **Xong** — audit_logs đủ cột + 3 index, `GET /admin/bookings` 200, staging live, CI xanh (§5.1) |
 | Online 2 | TLS/pool/timeout/reconnect, migration/rollback trên DB riêng | **Xong** — TLS/pool/timeout đo được, reconnect sau 7 phút idle trả 200, migration/rollback chạy trên DB kiểm chứng riêng |
 | Online 3 | Ghi schema/config/quyền/fixture, Huy review | **Một phần** — tài liệu này; fixture chưa chốt; Huy chưa review |
