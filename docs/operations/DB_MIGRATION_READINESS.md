@@ -94,6 +94,18 @@ So sánh DB vừa migrate từ đầu với staging:
 | Số bảng `public` | 10 |
 | Drift so với migration | Không (§4) |
 
+### 5.1. Schema cho Audit và Admin Booking
+
+Hai tính năng mà thẻ #98 nhắc riêng, kiểm tra trực tiếp trên staging:
+
+| Hạng mục | Kết quả |
+|---|---|
+| `audit_logs` cột | `id`, `actor_user_id`, `action`, `entity_type`, `entity_id`, `details` (jsonb), `request_id`, `occurred_at` |
+| `audit_logs` index | `audit_logs_pkey`, `idx_alogs_actor`, `idx_alogs_entity` |
+| `GET /admin/bookings` trên staging | **200** |
+| CI trên `develop` | 5 lượt gần nhất success |
+| Staging | Live, `GET /api/v1/ping` 200 |
+
 ## 6. TLS / pool / timeout
 
 | Hạng mục | Trạng thái |
@@ -227,6 +239,6 @@ Sau khi seed, script tự kiểm tra: 3 sport type, 6 court, 3 user, 588 `time_s
 | 2 | Rollback/recovery procedure | **Xong** — down-to 0 → up, hội tụ đúng schema |
 | 3 | Constraint/index integrity | **Xong** — 8/8 hạng mục khớp staging, không drift |
 | 4 | Staging schema/test data đúng version | **Một phần** — schema đúng version 11; fixture v1 đã viết sẵn nhưng **chưa chạy reset**, staging vẫn là dữ liệu QA tích luỹ |
-| Online 1 | Schema Audit/Admin Booking và staging/CI sẵn sàng | **Một phần** — staging sẵn sàng; bảng audit/booking đã có nhưng chưa audit nội dung dữ liệu |
+| Online 1 | Schema Audit/Admin Booking và staging/CI sẵn sàng | **Xong** — audit_logs đủ cột + 3 index, `GET /admin/bookings` 200, staging live, CI xanh (§5.1) |
 | Online 2 | TLS/pool/timeout/reconnect, migration/rollback trên DB riêng | **Xong** — TLS/pool/timeout đo được, reconnect sau 7 phút idle trả 200, migration/rollback chạy trên DB kiểm chứng riêng |
 | Online 3 | Ghi schema/config/quyền/fixture, Huy review | **Một phần** — tài liệu này; fixture chưa chốt; Huy chưa review |
