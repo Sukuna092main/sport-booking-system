@@ -1,0 +1,679 @@
+{
+  "info": {
+    "_postman_id": "1ed3ffa7-5c33-4fc7-9563-108a59420fd6",
+    "name": "Sport Booking — UAT Sprint 6 (UAT-01..10)",
+    "description": "Bộ kịch bản kiểm thử nghiệm thu UAT-01 đến UAT-10 cho Sprint 6 trên môi trường Staging trực tuyến.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://sport-booking-api-staging.onrender.com/api/v1",
+      "type": "string"
+    },
+    {
+      "key": "targetDate",
+      "value": "2026-11-22",
+      "type": "string"
+    },
+    {
+      "key": "runId",
+      "value": "s6-uat",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "0. Setup & Authentication (UAT-01, UAT-02)",
+      "item": [
+        {
+          "name": "UAT-01a: Register New User",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const ts = Date.now();",
+                  "pm.collectionVariables.set('newUserEmail', `uat-user-${ts}@example.test`);",
+                  "pm.collectionVariables.set('newUserPass', 'Password123@');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('UAT-01a: Register Status 201', () => pm.response.to.have.status(201));",
+                  "const res = pm.response.json();",
+                  "pm.test('UAT-01a: Role is USER', () => pm.expect(res.data.role).to.eql('USER'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{newUserEmail}}\",\n  \"password\": \"{{newUserPass}}\",\n  \"fullName\": \"Nguyễn Văn UAT\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/register"
+          }
+        },
+        {
+          "name": "UAT-01b: Login New User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('UAT-01b: Login Status 200', () => pm.response.to.have.status(200));",
+                  "const res = pm.response.json();",
+                  "pm.collectionVariables.set('userToken', res.data.accessToken);",
+                  "pm.test('UAT-01b: Token received', () => pm.expect(res.data.accessToken).to.be.a('string'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{newUserEmail}}\",\n  \"password\": \"{{newUserPass}}\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/login"
+          }
+        },
+        {
+          "name": "UAT-01c: Login Admin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('UAT-01c: Admin Login Status 200', () => pm.response.to.have.status(200));",
+                  "const res = pm.response.json();",
+                  "pm.collectionVariables.set('adminToken', res.data.accessToken);",
+                  "pm.test('UAT-01c: Role is ADMIN', () => pm.expect(res.data.user.role).to.eql('ADMIN'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"qa-s4-admin@example.test\",\n  \"password\": \"password123\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/login"
+          }
+        },
+        {
+          "name": "UAT-02a: Get User Profile",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('UAT-02a: Get Profile Status 200', () => pm.response.to.have.status(200));",
+                  "const res = pm.response.json();",
+                  "pm.test('UAT-02a: FullName matches', () => pm.expect(res.data.fullName).to.eql('Nguyễn Văn UAT'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{userToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "url": "{{baseUrl}}/users/me"
+          }
+        },
+        {
+          "name": "UAT-02b: Update User Profile",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('UAT-02b: Update Profile Status 200', () => pm.response.to.have.status(200));",
+                  "const res = pm.response.json();",
+                  "pm.test('UAT-02b: Phone updated', () => pm.expect(res.data.phone).to.eql('0987654321'));",
+                  "pm.test('UAT-02b: FullName updated', () => pm.expect(res.data.fullName).to.eql('Nguyễn Văn UAT Updated'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{userToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"Nguyễn Văn UAT Updated\",\n  \"phone\": \"0987654321\"\n}"
+            },
+            "url": "{{baseUrl}}/users/me"
+          }
+        }
+      ]
+    },
+    {
+      "name": "1. Court & Availability (UAT-03, UAT-04)",
+      "item": [
+        {
+          "name": "UAT-03a: List Sport Types",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('UAT-03a: List Sport Types 200', () => pm.response.to.have.status(200));",
+                  "const res = pm.response.json();",
+                  "pm.collectionVariables.set('sportTypeId', res.data[0].id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/sport-types"
+          }
+        },
+        {
+          "name": "UAT-03b: List Courts",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('UAT-03b: List Courts 200', () => pm.response.to.have.status(200));",
+                  "const res = pm.response.json();",
+                  "const court = res.data.find(c => c.code === 'QA-S4-c1792941470') || res.data[0];",
+                  "pm.collectionVariables.set('courtId', court.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/courts"
+          }
+        },
+        {
+          "name": "UAT-03c: Court Detail",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('UAT-03c: Court Detail 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/courts/{{courtId}}"
+          }
+        },
+        {
+          "name": "UAT-04: Court Availability",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('UAT-04: Availability 200', () => pm.response.to.have.status(200));",
+                  "const res = pm.response.json();",
+                  "const availSlots = res.data.slots.filter(s => s.available === true);",
+                  "pm.test('UAT-04: Has available slots', () => pm.expect(availSlots.length).to.be.above(1));",
+                  "pm.collectionVariables.set('slotId1', availSlots[0].id);",
+                  "pm.collectionVariables.set('slotId2', availSlots[1].id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/courts/{{courtId}}/availability?date={{targetDate}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Booking & Cancellation (UAT-05, UAT-06)",
+      "item": [
+        {
+          "name": "UAT-05: Create Consecutive Booking",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idempotencyKey', `uat-key-${Date.now()}`);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('UAT-05: Booking Created 201', () => pm.response.to.have.status(201));",
+                  "const res = pm.response.json();",
+                  "pm.collectionVariables.set('bookingId', res.data.id);",
+                  "pm.test('UAT-05: Booking status is CONFIRMED', () => pm.expect(res.data.status).to.eql('CONFIRMED'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{userToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idempotencyKey}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"courtId\": \"{{courtId}}\",\n  \"bookingDate\": \"{{targetDate}}\",\n  \"timeSlotIds\": [\"{{slotId1}}\", \"{{slotId2}}\"]\n}"
+            },
+            "url": "{{baseUrl}}/bookings"
+          }
+        },
+        {
+          "name": "UAT-05 Check: Verify Slots Booked",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('UAT-05 Check: Availability 200', () => pm.response.to.have.status(200));",
+                  "const res = pm.response.json();",
+                  "const s1 = res.data.slots.find(s => s.id === pm.collectionVariables.get('slotId1'));",
+                  "const s2 = res.data.slots.find(s => s.id === pm.collectionVariables.get('slotId2'));",
+                  "pm.test('UAT-05 Check: Slot 1 is now unavailable', () => pm.expect(s1.available).to.be.false);",
+                  "pm.test('UAT-05 Check: Slot 2 is now unavailable', () => pm.expect(s2.available).to.be.false);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/courts/{{courtId}}/availability?date={{targetDate}}"
+          }
+        },
+        {
+          "name": "UAT-06a: Get My Bookings",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('UAT-06a: My Bookings 200', () => pm.response.to.have.status(200));",
+                  "const res = pm.response.json();",
+                  "const exists = res.data.some(b => b.id === pm.collectionVariables.get('bookingId'));",
+                  "pm.test('UAT-06a: Booking present in user list', () => pm.expect(exists).to.be.true);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{userToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "url": "{{baseUrl}}/bookings"
+          }
+        },
+        {
+          "name": "UAT-06b: Cancel Booking",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('UAT-06b: Cancel Booking 200', () => pm.response.to.have.status(200));",
+                  "const res = pm.response.json();",
+                  "pm.test('UAT-06b: Status changed to CANCELLED', () => pm.expect(res.data.status).to.eql('CANCELLED'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{userToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "url": "{{baseUrl}}/bookings/{{bookingId}}/cancel"
+          }
+        },
+        {
+          "name": "UAT-06c Check: Verify Slots Released",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('UAT-06c Check: Availability 200', () => pm.response.to.have.status(200));",
+                  "const res = pm.response.json();",
+                  "const s1 = res.data.slots.find(s => s.id === pm.collectionVariables.get('slotId1'));",
+                  "const s2 = res.data.slots.find(s => s.id === pm.collectionVariables.get('slotId2'));",
+                  "pm.test('UAT-06c Check: Slot 1 is released back to available', () => pm.expect(s1.available).to.be.true);",
+                  "pm.test('UAT-06c Check: Slot 2 is released back to available', () => pm.expect(s2.available).to.be.true);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/courts/{{courtId}}/availability?date={{targetDate}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Admin Management & Blackout (UAT-07, UAT-08)",
+      "item": [
+        {
+          "name": "UAT-07a: Admin Create Court",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('newCourtCode', `UAT-${Date.now().toString().slice(-6)}`);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('UAT-07a: Admin Create Court 201', () => pm.response.to.have.status(201));",
+                  "const res = pm.response.json();",
+                  "pm.collectionVariables.set('newCourtId', res.data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sportTypeId\": \"{{sportTypeId}}\",\n  \"code\": \"{{newCourtCode}}\",\n  \"name\": \"Sân Tennis UAT VIP\",\n  \"isActive\": true,\n  \"slotDurationMinutes\": 60,\n  \"minConsecutiveSlots\": 1,\n  \"maxConsecutiveSlots\": 4,\n  \"referencePriceAmount\": \"250000\",\n  \"referencePriceCurrency\": \"VND\"\n}"
+            },
+            "url": "{{baseUrl}}/admin/courts"
+          }
+        },
+        {
+          "name": "UAT-07b: Admin Set Operating Hours",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('UAT-07b: Set Operating Hours 200', () => pm.response.to.have.status(200));",
+                  "const res = pm.response.json();",
+                  "pm.test('UAT-07b: TimeSlots generated', () => pm.expect(res.data.timeSlots.length).to.be.above(0));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"hours\": [\n    {\"weekday\": 1, \"opensAt\": \"08:00:00\", \"closesAt\": \"22:00:00\"},\n    {\"weekday\": 2, \"opensAt\": \"08:00:00\", \"closesAt\": \"22:00:00\"},\n    {\"weekday\": 3, \"opensAt\": \"08:00:00\", \"closesAt\": \"22:00:00\"},\n    {\"weekday\": 4, \"opensAt\": \"08:00:00\", \"closesAt\": \"22:00:00\"},\n    {\"weekday\": 5, \"opensAt\": \"08:00:00\", \"closesAt\": \"22:00:00\"},\n    {\"weekday\": 6, \"opensAt\": \"08:00:00\", \"closesAt\": \"22:00:00\"},\n    {\"weekday\": 7, \"opensAt\": \"08:00:00\", \"closesAt\": \"22:00:00\"}\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/admin/courts/{{newCourtId}}/operating-hours"
+          }
+        },
+        {
+          "name": "UAT-08a: Admin Create Blackout",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('UAT-08a: Create Blackout 201', () => pm.response.to.have.status(201));",
+                  "const res = pm.response.json();",
+                  "pm.collectionVariables.set('blackoutId', res.data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"startsAt\": \"2026-11-23T08:00:00Z\",\n  \"endsAt\": \"2026-11-23T12:00:00Z\",\n  \"reason\": \"Bảo trì định kỳ UAT\"\n}"
+            },
+            "url": "{{baseUrl}}/admin/courts/{{courtId}}/blackouts"
+          }
+        },
+        {
+          "name": "UAT-08b Check: Verify Blackout in Availability",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('UAT-08b Check: Availability reflects Blackout 200', () => pm.response.to.have.status(200));",
+                  "const res = pm.response.json();",
+                  "const blocked = res.data.slots.filter(s => s.available === false);",
+                  "pm.test('UAT-08b Check: Has blocked slots due to blackout', () => pm.expect(blocked.length).to.be.above(0));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/courts/{{courtId}}/availability?date=2026-11-23"
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Statistics & Audit Trail (UAT-09, UAT-10)",
+      "item": [
+        {
+          "name": "UAT-09: Admin Statistics Dashboard",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('UAT-09: Statistics Status 200', () => pm.response.to.have.status(200));",
+                  "const res = pm.response.json();",
+                  "pm.test('UAT-09: Statistics data is valid', () => pm.expect(res).to.be.an('object'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "url": "{{baseUrl}}/admin/statistics?from=2026-11-01&to=2026-11-30"
+          }
+        },
+        {
+          "name": "UAT-10: Admin Bookings Audit Trail",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('UAT-10: Admin Bookings List 200', () => pm.response.to.have.status(200));",
+                  "const res = pm.response.json();",
+                  "pm.test('UAT-10: Bookings array returned', () => pm.expect(res.data).to.be.an('array'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "url": "{{baseUrl}}/admin/bookings"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -32,9 +32,9 @@ Bộ tài khoản thử nghiệm được chuẩn bị độc lập cho UAT, đ�
 
 | STT | Vai trò (Role) | Email đăng nhập | Mật khẩu mặc định | Mục đích sử dụng |
 |:---:|:---:|---|:---:|---|
-| 1 | **USER (Chính)** | `fixture-user1@example.test` | `password123` | Dùng cho kịch bản xem sân, đặt sân (UAT-03..05), hủy sân (UAT-06), cập nhật profile (UAT-02) |
-| 2 | **USER (Đối chứng)** | `fixture-user2@example.test` | `password123` | Dùng kiểm thử đặt sân đồng thời (concurrency), kiểm tra dữ liệu phân tách giữa các user |
-| 3 | **ADMIN** | `fixture-admin@example.test` | `password123` | Dùng kiểm thử quản lý sân, blackout, khung giờ (UAT-07..08), xem thống kê (UAT-09), audit log (UAT-10) |
+| 1 | **USER (Chính)** | `qa-s4-user@example.test` | `password123` | Dùng cho kịch bản xem sân, đặt sân (UAT-03..05), hủy sân (UAT-06), cập nhật profile (UAT-02) |
+| 2 | **USER (Đối chứng)** | `qa-s4-user2@example.test` | `password123` | Dùng kiểm thử đặt sân đồng thời (concurrency), kiểm tra dữ liệu phân tách giữa các user |
+| 3 | **ADMIN** | `qa-s4-admin@example.test` | `password123` | Dùng kiểm thử quản lý sân, blackout, khung giờ (UAT-07..08), xem thống kê (UAT-09), audit log (UAT-10) |
 | 4 | **USER (Tạo mới)** | `uat-newuser-20261117@example.test` | `password123` | Dùng kiểm thử đăng ký tài khoản mới tinh từ màn hình Register (UAT-01) |
 
 > ⚠️ **Lưu ý an toàn:** Tuyệt đối không sử dụng mật khẩu thực tế, email thật hoặc thông tin cá nhân của khách hàng. Tất cả tài khoản trên đều sử dụng tên miền thử nghiệm `.test`.
@@ -81,10 +81,10 @@ Dữ liệu hệ thống đã được đồng bộ thông qua script chuẩn h�
 
 ### UAT-02: Xem & Cập nhật Hồ sơ Cá nhân (User Profile)
 * **Truy vết:** FR-03 (Profile Management).
-* **Vai trò:** Người dùng (`fixture-user1@example.test`).
-* **Dữ liệu đầu vào:** Số điện thoại: `0987654321`, Tên hiển thị mới: `Fixture User 1 Updated`.
+* **Vai trò:** Người dùng (`qa-s4-user@example.test`).
+* **Dữ liệu đầu vào:** Số điện thoại: `0987654321`, Tên hiển thị mới: `QA User Updated`.
 * **Các bước thực hiện:**
-  1. Đăng nhập bằng tài khoản `fixture-user1@example.test`.
+  1. Đăng nhập bằng tài khoản `qa-s4-user@example.test`.
   2. Truy cập trang "Hồ sơ cá nhân" (Profile) từ menu người dùng.
   3. Kiểm tra thông tin hiển thị hiện tại.
   4. Cập nhật Số điện thoại hoặc Họ tên, bấm "Lưu thay đổi".
@@ -124,7 +124,7 @@ Dữ liệu hệ thống đã được đồng bộ thông qua script chuẩn h�
 
 ### UAT-05: Đặt sân Đơn slot & Nhiều slot Liên tiếp (Create Booking)
 * **Truy vết:** FR-06, BR-01 (Booking Creation & Time Slot Rules).
-* **Vai trò:** Người dùng (`fixture-user1@example.test`).
+* **Vai trò:** Người dùng (`qa-s4-user@example.test`).
 * **Dữ liệu đầu vào:** Sân `BM-01`, Ngày D+1, chọn 2 slot liên tiếp (ví dụ: 17:00 - 18:00 và 18:00 - 19:00).
 * **Các bước thực hiện:**
   1. Chọn 2 khung giờ liên tiếp hợp lệ còn trống trên bảng lịch.
@@ -139,7 +139,7 @@ Dữ liệu hệ thống đã được đồng bộ thông qua script chuẩn h�
 
 ### UAT-06: Xem Đơn đặt của tôi & Thực hiện Hủy sân (My Bookings & Cancellation)
 * **Truy vết:** FR-07, BR-02 (My Bookings & Cancellation Policy).
-* **Vai trò:** Người dùng (`fixture-user1@example.test`).
+* **Vai trò:** Người dùng (`qa-s4-user@example.test`).
 * **Dữ liệu đầu vào:** Mã đơn đặt sân vừa tạo ở kịch bản UAT-05.
 * **Các bước thực hiện:**
   1. Vào mục "Đơn đặt của tôi" (My Bookings).
@@ -155,7 +155,7 @@ Dữ liệu hệ thống đã được đồng bộ thông qua script chuẩn h�
 
 ### UAT-07: Quản trị viên Quản lý Sân & Cấu hình Giờ hoạt động (Admin Court & Schedule)
 * **Truy vết:** FR-08, FR-09 (Admin Court & Operating Hours).
-* **Vai trò:** Quản trị viên (`fixture-admin@example.test`).
+* **Vai trò:** Quản trị viên (`qa-s4-admin@example.test`).
 * **Dữ liệu đầu vào:** Tên sân mới: `Sân Tennis VIP 01`, Mã: `TN-VIP`, Giờ mở cửa: `06:00 - 22:00`.
 * **Các bước thực hiện:**
   1. Đăng nhập với tài khoản ADMIN, truy cập trang Quản trị (Admin Dashboard).
@@ -170,7 +170,7 @@ Dữ liệu hệ thống đã được đồng bộ thông qua script chuẩn h�
 
 ### UAT-08: Quản trị viên Thiết lập Lịch bảo trì / Khóa sân (Admin Blackout)
 * **Truy vết:** FR-10 (Court Blackout Management).
-* **Vai trò:** Quản trị viên (`fixture-admin@example.test`).
+* **Vai trò:** Quản trị viên (`qa-s4-admin@example.test`).
 * **Dữ liệu đầu vào:** Sân `FB-01`, Ngày D+2, Khung giờ: 08:00 - 12:00, Lý do: `Bảo trì mặt cỏ định kỳ`.
 * **Các bước thực hiện:**
   1. Tại trang Quản trị, chọn mục "Quản lý Bảo trì" (Blackouts).
@@ -185,7 +185,7 @@ Dữ liệu hệ thống đã được đồng bộ thông qua script chuẩn h�
 
 ### UAT-09: Quản trị viên Tra cứu Thống kê Cơ bản (Basic Statistics)
 * **Truy vết:** FR-11 (Admin Statistics Dashboard).
-* **Vai trò:** Quản trị viên (`fixture-admin@example.test`).
+* **Vai trò:** Quản trị viên (`qa-s4-admin@example.test`).
 * **Dữ liệu đầu vào:** Bộ lọc theo tháng hiện tại.
 * **Các bước thực hiện:**
   1. Tại trang Quản trị, chọn mục "Báo cáo & Thống kê" (Statistics).
@@ -198,7 +198,7 @@ Dữ liệu hệ thống đã được đồng bộ thông qua script chuẩn h�
 
 ### UAT-10: Quản trị viên Kiểm tra Nhật ký Hoạt động (Audit Log)
 * **Truy vết:** FR-12 (System Audit Trail).
-* **Vai trò:** Quản trị viên (`fixture-admin@example.test`).
+* **Vai trò:** Quản trị viên (`qa-s4-admin@example.test`).
 * **Dữ liệu đầu vào:** Tra cứu các thao tác vừa diễn ra.
 * **Các bước thực hiện:**
   1. Tại trang Quản trị, chọn mục "Nhật ký hệ thống" (Audit Logs).
