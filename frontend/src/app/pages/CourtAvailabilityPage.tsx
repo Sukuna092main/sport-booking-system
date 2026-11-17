@@ -310,9 +310,10 @@ export function CourtAvailabilityPage() {
     // Persist payload and review data in sessionStorage
     sessionStorage.setItem("pending_booking_payload", JSON.stringify(bookingPayload))
     sessionStorage.setItem("pending_booking_review", JSON.stringify(reviewData))
+    sessionStorage.setItem("pending_booking_idempotency_key", crypto.randomUUID())
 
     if (!isAuthenticated) {
-      navigate("/login")
+      navigate("/login", { state: { from: "/bookings/review" } })
       return
     }
 

@@ -1,31 +1,24 @@
-/**
- * Token storage helpers.
- * Dùng localStorage; key cố định để các module khác không tự đặt key.
- */
-
-const TOKEN_KEY = "sb_access_token"
-const EXPIRES_KEY = "sb_token_expires_at"
+// Access tokens stay in memory. The refresh credential is an HttpOnly cookie
+// owned and rotated by the API, so JavaScript never reads or persists it.
+let accessToken: string | null = null
+let expiresAt: string | null = null
 
 export const tokenStorage = {
   get(): string | null {
-    return localStorage.getItem(TOKEN_KEY)
+    return accessToken
   },
 
-  set(token: string, expiresAt?: string): void {
-    localStorage.setItem(TOKEN_KEY, token)
-    if (expiresAt) {
-      localStorage.setItem(EXPIRES_KEY, expiresAt)
-    }
+  set(token: string, expiration?: string): void {
+    accessToken = token
+    expiresAt = expiration ?? null
   },
 
   clear(): void {
-    localStorage.removeItem(TOKEN_KEY)
-    localStorage.removeItem(EXPIRES_KEY)
+    accessToken = null
+    expiresAt = null
   },
 
   isExpired(): boolean {
-    const expiresAt = localStorage.getItem(EXPIRES_KEY)
-    if (!expiresAt) return false
-    return new Date(expiresAt) <= new Date()
+    return expiresAt !== null && new Date(expiresAt).getTime() <= Date.now()
   },
 }

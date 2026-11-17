@@ -51,6 +51,7 @@ func CORS(origins []string) gin.HandlerFunc {
 				}
 			}
 			c.Header("Access-Control-Allow-Origin", origin)
+			c.Header("Access-Control-Allow-Credentials", "true")
 			c.Header("Access-Control-Allow-Methods", "GET, HEAD, POST, PUT, PATCH, DELETE")
 			c.Header("Access-Control-Allow-Headers", "Authorization, Content-Type, Accept, X-Request-ID, Idempotency-Key")
 			c.Header("Access-Control-Max-Age", "600")
@@ -61,6 +62,7 @@ func CORS(origins []string) gin.HandlerFunc {
 		// retain normal behavior; CORS is not a replacement for JWT/role authorization.
 		if allowedOrigins[origin] {
 			c.Header("Access-Control-Allow-Origin", origin)
+			c.Header("Access-Control-Allow-Credentials", "true")
 			c.Header("Access-Control-Expose-Headers", "X-Request-ID")
 		}
 		c.Next()

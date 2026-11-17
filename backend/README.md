@@ -26,15 +26,15 @@ Booking và các API Admin đã triển khai: SportType/Court CRUD xóa mềm, l
 
 ## Chạy backend
 
-Để chạy trên máy với Neon từ cấu hình sẵn trong `backend/.env`, dùng PowerShell tại root repo:
+Để chạy trên máy với Neon từ cấu hình sẵn trong `.env` ở root repo, dùng PowerShell tại root:
 
 ```powershell
 & .\scripts\dev\Start-BackendNeon.ps1
 ```
 
-Script kiểm tra đích Neon/TLS, nạp biến môi trường và tạo JWT secret tạm nếu để trống trong development. Giữ Terminal mở; đăng nhập lại sau mỗi lần chạy nếu dùng secret tạm. Xem [hướng dẫn launcher](../scripts/dev/README.md). Không cần bật backend/DB Docker cho chế độ này.
+Script kiểm tra đích Neon/TLS, nạp biến môi trường allowlist và chạy API. Dùng secret ổn định được tạo/lưu cục bộ trong `.env`; không đổi mỗi lần khởi động môi trường chung. Xem [hướng dẫn launcher](../scripts/dev/README.md). Không cần bật backend/DB Docker cho chế độ này.
 
-Go 1.25+. Ứng dụng đọc biến môi trường, không tự nạp `.env`. Dùng [`.env.example`](.env.example) làm danh sách cấu hình.
+Go 1.25+. Ứng dụng đọc biến môi trường, không tự nạp `.env`. Dùng [mẫu cấu hình root](../.env.example); lệnh launcher nạp riêng biến được backend hỗ trợ.
 
 ```powershell
 $env:APP_ENV = "development"
@@ -62,11 +62,19 @@ $env:CORS_ALLOWED_ORIGINS = "http://localhost:5173,http://127.0.0.1:5173"
 
 Khi biến chưa được đặt, development dùng hai origin local trên; test/production dùng allowlist rỗng. Đặt biến thành chuỗi rỗng để đóng CORS. Cấu hình sai làm server từ chối khởi động. Với online, Hưng cấu hình origin HTTPS thật do Duy bàn giao rồi redeploy; phải smoke trên URL thực tế.
 
-Preflight `OPTIONS` từ origin trong allowlist trả 204, hỗ trợ các method REST và headers `Authorization`, `Content-Type`, `Accept`, `X-Request-ID`, `Idempotency-Key`. Origin/header/method không được phép khiến preflight trả lỗi. Response thực từ origin được phép vẫn giữ mã lỗi Auth 400/401/403 và expose `X-Request-ID`. Không bật cookie credentials. CORS kiểm soát quyền trình duyệt đọc response; JWT và role middleware tiếp tục kiểm soát API, kể cả với curl hoặc Swagger cùng origin.
+Preflight `OPTIONS` từ origin trong allowlist trả 204, hỗ trợ các method REST và headers `Authorization`, `Content-Type`, `Accept`, `X-Request-ID`, `Idempotency-Key`. Origin/header/method không được phép khiến preflight trả lỗi. Response từ origin cho phép expose `X-Request-ID` và bật credentials để frontend gửi/nhận refresh cookie HttpOnly. Không dùng wildcard; `RequireAllowedOrigin` kiểm tra origin với thao tác refresh/logout dùng cookie. CORS kiểm soát quyền trình duyệt đọc response; JWT và role middleware tiếp tục kiểm soát API, kể cả với curl hoặc Swagger cùng origin.
 
 ### Docker cục bộ
 
-Tạo JWT_SECRET trong shell như trên, rồi từ root repo chạy `docker compose up --build`. Compose dùng DB cục bộ và volume riêng. Không đổi URL dịch vụ migrate sang Neon nếu chưa kiểm tra migration/dữ liệu với người quản lý DB.
+Từ root repo chạy `.\scripts\dev\Initialize-LocalEnv.ps1`, sau đó `docker compose up --build`. Compose dùng DB cục bộ, volume riêng và chạy Goose migrations trên DB local. Không đổi dịch vụ migrate sang Neon nếu chưa được chủ sở hữu DB xác nhận.
+
+### Auth, thanh toán và email
+
+- `REFRESH_TOKEN_TTL`, `PASSWORD_RESET_TTL`, `REFRESH_COOKIE_SECURE`, `REFRESH_COOKIE_SAME_SITE`, `FRONTEND_PUBLIC_URL`, `CORS_ALLOWED_ORIGINS` cấu hình refresh cookie và reset link. Cookie production phải Secure; frontend origin cần nằm trong CORS allowlist. `SameSite=none` chỉ dùng khi frontend/API thật sự khác site và luôn cần Secure/HTTPS.
+- Mẫu root `.env.example` liệt kê đầy đủ biến runtime cho API, worker, frontend và Compose, kể cả các HTTP timeout. `scripts/dev/Initialize-LocalEnv.ps1` tạo `.env` local và sinh JWT/AES/PostgreSQL secrets; Neon, SMTP và merchant credential vẫn phải do chủ tài khoản cấp.
+- `PAYMENT_ENABLED=false` mặc định. Đặt `PAYMENT_ENABLED=true`, `PAYMENT_PROVIDER=mock` để demo local; hoặc `PAYMENT_PROVIDER=vnpay` và điền `VNPAY_TMN_CODE`, `VNPAY_HASH_SECRET`, `VNPAY_PAYMENT_URL`, `VNPAY_RETURN_URL`, `VNPAY_IPN_URL` theo sandbox/prod merchant. Return/IPN phải là endpoint HTTPS thật, truy cập được từ VNPAY; URL giả hoặc `localhost` không nhận callback. Admin cần đặt giá từng sân qua `PUT /admin/courts/{courtId}/pricing` trước khi nhận booking đặt cọc.
+- Email đặt lịch và password reset cần bật đồng thời `EMAIL_ENABLED=true` và `EMAIL_WORKER_ENABLED=true`; điền SMTP settings (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM`, `SMTP_USE_TLS`) theo SMTP relay của bạn. `EMAIL_ENCRYPTION_KEY` là khóa AES-GCM 32 byte dạng Base64, được script local sinh sẵn. Không commit hoặc gửi `.env` có credential thật.
+- API server không chạy migration tự động. Trên môi trường dùng chung, người có trách nhiệm DB phải review backup/rollback rồi áp dụng migrations theo quy trình riêng.
 
 ### Migration 00011
 

@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Sport Booking API
-  version: 0.5.0
+  version: 0.6.0
   description: |
     Hợp đồng API MVP. Xem x-implementation-status của từng operation.
     Các operation có x-implementation-status: planned là hợp đồng để review,
@@ -16,6 +16,7 @@ tags:
   - name: Sport types
   - name: Courts
   - name: Bookings
+  - name: Payments
   - name: Admin
 paths:
   /ping:
@@ -72,7 +73,7 @@ paths:
               $ref: '#/components/schemas/LoginRequest'
       responses:
         '200':
-          description: Cấp JWT access token; hết hạn thì đăng nhập lại.
+          description: Cấp access token ngắn hạn trong response và refresh token trong cookie HttpOnly.
           content:
             application/json:
               schema:
@@ -369,6 +370,224 @@ paths:
           $ref: '#/components/responses/InternalError'
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Xoay refresh token và cấp access token mới
+      operationId: refreshSession
+      x-implementation-status: implemented
+      security: [{ refreshCookie: [] }]
+      responses:
+        '200':
+          description: Refresh token cũ bị đánh dấu đã dùng; token mới được đặt trong cookie HttpOnly.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LoginResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Thu hồi phiên refresh hiện tại
+      operationId: logout
+      x-implementation-status: implemented
+      security: [{ refreshCookie: [] }]
+      responses:
+        '200': { description: Phiên đã thu hồi và cookie được xóa. }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /auth/logout-all:
+    post:
+      tags: [Auth]
+      summary: Thu hồi mọi phiên của tài khoản
+      operationId: logoutAll
+      x-implementation-status: implemented
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: Các refresh token hiện tại đã bị thu hồi. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /auth/forgot-password:
+    post:
+      tags: [Auth]
+      summary: Yêu cầu gửi liên kết đặt lại mật khẩu
+      operationId: forgotPassword
+      x-implementation-status: implemented
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties: { email: { type: string, format: email } }
+      responses:
+        '202': { description: Phản hồi giống nhau để không tiết lộ email có tài khoản hay không. }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+  /auth/reset-password:
+    post:
+      tags: [Auth]
+      summary: Đặt mật khẩu mới bằng token một lần
+      operationId: resetPassword
+      x-implementation-status: implemented
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, newPassword]
+              properties:
+                token: { type: string }
+                newPassword: { type: string, minLength: 8, maxLength: 72, format: password }
+      responses:
+        '200': { description: Đổi mật khẩu thành công; các phiên cũ bị thu hồi. }
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /auth/change-password:
+    post:
+      tags: [Auth]
+      summary: Đổi mật khẩu khi đã đăng nhập
+      operationId: changePassword
+      x-implementation-status: implemented
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [currentPassword, newPassword]
+              properties:
+                currentPassword: { type: string, format: password }
+                newPassword: { type: string, minLength: 8, maxLength: 72, format: password }
+      responses:
+        '200': { description: Đổi mật khẩu thành công; người dùng cần đăng nhập lại. }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /bookings/{bookingId}/payments:
+    post:
+      tags: [Payments]
+      summary: Tạo hoặc tiếp tục phiên thanh toán đặt cọc
+      operationId: startBookingPayment
+      x-implementation-status: implemented
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/BookingId' }]
+      responses:
+        '201':
+          description: Thông tin giao dịch và checkout URL.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      id: { type: string, format: uuid }
+                      bookingId: { type: string, format: uuid }
+                      provider: { type: string, enum: [mock, vnpay] }
+                      providerOrderRef: { type: string }
+                      amountVnd: { type: integer, format: int64 }
+                      currency: { type: string, example: VND }
+                      status: { type: string, enum: [PENDING, PAID, FAILED, EXPIRED, PAID_REVIEW] }
+                      checkoutUrl: { type: string, format: uri }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+    get:
+      tags: [Payments]
+      summary: Xem trạng thái thanh toán của booking
+      operationId: getBookingPaymentStatus
+      x-implementation-status: implemented
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/BookingId' }]
+      responses:
+        '200':
+          description: Trạng thái booking và số tiền được chụp tại lúc đặt.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      bookingId: { type: string, format: uuid }
+                      bookingStatus: { type: string }
+                      totalAmountVnd: { type: integer, format: int64 }
+                      depositAmountVnd: { type: integer, format: int64 }
+                      remainingAmountVnd: { type: integer, format: int64 }
+                      payment: { type: object, nullable: true }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /payments/mock/{orderRef}/complete:
+    post:
+      tags: [Payments]
+      summary: Hoàn tất giao dịch mô phỏng trong development
+      operationId: completeMockPayment
+      x-implementation-status: implemented
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: orderRef
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [success]
+              properties: { success: { type: boolean } }
+      responses:
+        '200': { description: Giao dịch mô phỏng đã được xử lý. }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /payments/vnpay/ipn:
+    get:
+      tags: [Payments]
+      summary: Callback IPN xác minh chữ ký VNPAY
+      operationId: vnpayIPN
+      x-implementation-status: implemented
+      responses:
+        '200': { description: Mã xác nhận IPN theo giao thức VNPAY. }
+  /payments/vnpay/return:
+    get:
+      tags: [Payments]
+      summary: Redirect trình duyệt từ VNPAY về frontend
+      operationId: vnpayReturn
+      x-implementation-status: implemented
+      responses:
+        '303': { description: Redirect tới trang kết quả frontend; trạng thái cuối lấy từ IPN/API. }
+  /courts/{courtId}/pricing:
+    get:
+      tags: [Payments]
+      summary: Xem giá thanh toán đang áp dụng của sân
+      operationId: getCourtPricing
+      x-implementation-status: implemented
+      parameters: [{ $ref: '#/components/parameters/CourtId' }]
+      responses:
+        '200': { description: Giá mỗi slot VND do ADMIN thiết lập. }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /admin/courts/{courtId}/pricing:
+    put:
+      tags: [Payments]
+      summary: Thiết lập giá thanh toán cho sân
+      operationId: setCourtPricing
+      x-implementation-status: implemented
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/CourtId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pricePerSlotVnd]
+              properties:
+                pricePerSlotVnd: { type: integer, format: int64, minimum: 1 }
+                isActive: { type: boolean, default: true }
+      responses:
+        '200': { description: Giá thanh toán đã cập nhật. }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /admin/sport-types:
     get:
       tags: [Admin]
@@ -783,6 +1002,11 @@ components:
       scheme: bearer
       bearerFormat: JWT
       description: JWT access token; sub là user UUID, role là USER/ADMIN, có iat và exp.
+    refreshCookie:
+      type: apiKey
+      in: cookie
+      name: sb_refresh_token
+      description: Refresh credential HttpOnly do API cấp và xoay vòng.
   parameters:
     CourtId:
       name: courtId
@@ -867,6 +1091,11 @@ components:
           schema: { $ref: '#/components/schemas/ErrorResponse' }
     Unprocessable:
       description: Yêu cầu đúng cú pháp nhưng vi phạm quy tắc đặt sân (booking_rule_violation).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    TooManyRequests:
+      description: Vượt giới hạn yêu cầu; thử lại sau thời gian Retry-After.
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorResponse' }

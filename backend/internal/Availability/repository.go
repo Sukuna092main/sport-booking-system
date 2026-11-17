@@ -92,7 +92,8 @@ func ReadSnapshot(ctx context.Context, tx *sql.Tx, id string, weekday int, from,
 	rows, err = tx.QueryContext(ctx, `SELECT starts_at,ends_at FROM court_blackouts WHERE court_id=$1 AND is_active AND starts_at<$3 AND ends_at>$2
 	    UNION ALL
 	    SELECT bs.starts_at,bs.ends_at FROM booking_slots bs JOIN bookings b ON b.id=bs.booking_id
-	    WHERE bs.court_id=$1 AND b.status='CONFIRMED' AND bs.released_at IS NULL AND bs.starts_at<$3 AND bs.ends_at>$2`, id, from, to)
+	    WHERE bs.court_id=$1 AND (b.status='CONFIRMED' OR (b.status='PENDING_PAYMENT' AND b.hold_expires_at>clock_timestamp()))
+	      AND bs.released_at IS NULL AND bs.starts_at<$3 AND bs.ends_at>$2`, id, from, to)
 	if err != nil {
 		return Snapshot{}, err
 	}

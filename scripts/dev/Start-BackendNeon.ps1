@@ -1,9 +1,17 @@
 param(
-    [string]$EnvFile = (Join-Path $PSScriptRoot '../../backend/.env')
+    [string]$EnvFile = ''
 )
 
 $ErrorActionPreference = 'Stop'
-$qaBackendPath = (Resolve-Path (Join-Path $PSScriptRoot '../../backend')).Path
+$qaProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
+$qaBackendPath = (Resolve-Path (Join-Path $qaProjectRoot 'backend')).Path
+if ([string]::IsNullOrWhiteSpace($EnvFile)) {
+    $EnvFile = Join-Path $qaProjectRoot '.env'
+    $qaLegacyEnvFile = Join-Path $qaBackendPath '.env'
+    if (-not (Test-Path -LiteralPath $EnvFile) -and (Test-Path -LiteralPath $qaLegacyEnvFile)) {
+        $EnvFile = $qaLegacyEnvFile
+    }
+}
 $qaPreviousEnvironment = @{}
 
 try {
@@ -12,7 +20,7 @@ try {
         if ($qaLine -notmatch '^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=(.*)$') { continue }
         $qaName = $Matches[1]
         $qaValue = $Matches[2].Trim()
-        if ($qaName -notmatch '^(APP_[A-Z_]+|HTTP_[A-Z_]+|LOG_LEVEL|DATABASE_URL|DB_[A-Z_]+|JWT_[A-Z_]+|CORS_ALLOWED_ORIGINS)$') { continue }
+        if ($qaName -notmatch '^(APP_[A-Z_]+|HTTP_[A-Z_]+|LOG_LEVEL|DATABASE_URL|DB_[A-Z_]+|JWT_[A-Z_]+|REFRESH_[A-Z_]+|PASSWORD_RESET_TTL|FRONTEND_PUBLIC_URL|CORS_ALLOWED_ORIGINS|PAYMENT_[A-Z_]+|VNPAY_[A-Z_]+|EMAIL_[A-Z_]+|SMTP_[A-Z_]+)$') { continue }
         if ($qaValue.Length -ge 2 -and (
             ($qaValue.StartsWith('"') -and $qaValue.EndsWith('"')) -or
             ($qaValue.StartsWith("'") -and $qaValue.EndsWith("'"))

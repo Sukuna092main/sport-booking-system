@@ -21,13 +21,13 @@ type SQLRepository struct{ db *sql.DB }
 
 func NewRepository(db *sql.DB) *SQLRepository { return &SQLRepository{db: db} }
 
-const columns = "id::text, email::text, password_hash, full_name, phone, role, status, created_at, updated_at"
+const columns = "id::text, email::text, password_hash, full_name, phone, role, status, auth_version, created_at, updated_at"
 
 type scanner interface{ Scan(...any) error }
 
 func scanUser(row scanner) (User, error) {
 	var u User
-	err := row.Scan(&u.ID, &u.Email, &u.PasswordHash, &u.FullName, &u.Phone, &u.Role, &u.Status, &u.CreatedAt, &u.UpdatedAt)
+	err := row.Scan(&u.ID, &u.Email, &u.PasswordHash, &u.FullName, &u.Phone, &u.Role, &u.Status, &u.AuthVersion, &u.CreatedAt, &u.UpdatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return User{}, ErrNotFound
 	}

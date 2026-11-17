@@ -1,4 +1,4 @@
-import { apiClient } from "@/lib/api/client"
+import { apiClient, refreshSession } from "@/lib/api/client"
 import type {
   LoginRequest,
   LoginResponse,
@@ -38,6 +38,26 @@ export const authApi = {
     return apiClient
       .post<LoginResponse>("/auth/login", body)
       .then((r) => r.data)
+  },
+
+  refresh(): Promise<LoginResponse> {
+    return refreshSession()
+  },
+
+  logout(): Promise<unknown> {
+    return apiClient.post("/auth/logout").then((r) => r.data)
+  },
+
+  forgotPassword(email: string): Promise<{ data: { message: string } }> {
+    return apiClient.post("/auth/forgot-password", { email }).then((r) => r.data)
+  },
+
+  resetPassword(token: string, newPassword: string): Promise<{ data: { message: string } }> {
+    return apiClient.post("/auth/reset-password", { token, newPassword }).then((r) => r.data)
+  },
+
+  changePassword(currentPassword: string, newPassword: string): Promise<{ data: { message: string } }> {
+    return apiClient.post("/auth/change-password", { currentPassword, newPassword }).then((r) => r.data)
   },
 
   /**

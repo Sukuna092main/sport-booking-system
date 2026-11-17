@@ -39,6 +39,14 @@ func Authenticate(users user.Repository, tokens *Tokens) gin.HandlerFunc {
 			response.Error(c, http.StatusForbidden, "account_inactive", "Tài khoản không hoạt động.")
 			return
 		}
+		version := u.AuthVersion
+		if version < 1 {
+			version = 1
+		}
+		if claims.AuthVersion != version {
+			unauthorized(c)
+			return
+		}
 		if u.Role != "USER" && u.Role != "ADMIN" {
 			response.Error(c, http.StatusForbidden, "forbidden", "Không đủ quyền truy cập.")
 			return

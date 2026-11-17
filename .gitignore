@@ -19,6 +19,8 @@ backend/bin/
 backend/coverage.out
 *.test
 *.exe
+.cache/
+/sport-booking-system-share.zip
 
 # Local machine/editor files
 .DS_Store

@@ -1,6 +1,6 @@
-import axios, { type AxiosError } from "axios"
+import axios, { type AxiosError, type InternalAxiosRequestConfig } from "axios"
 import { tokenStorage } from "@/lib/auth/token"
-import type { ApiErrorResponse } from "@/types/auth.types"
+import type { ApiErrorResponse, LoginResponse } from "@/types/auth.types"
 
 const baseURL = import.meta.env.VITE_API_BASE_URL
 
@@ -10,38 +10,56 @@ if (!baseURL) {
 
 export const apiClient = axios.create({
   baseURL,
-  headers: {
-    "Content-Type": "application/json",
-  },
+  withCredentials: true,
+  headers: { "Content-Type": "application/json" },
 })
 
-/** Attach Bearer token to every request if available */
+type RetryableRequest = InternalAxiosRequestConfig & { __authRetry?: boolean }
+let refreshFlight: Promise<LoginResponse> | null = null
+
+export function refreshSession(): Promise<LoginResponse> {
+  if (!refreshFlight) {
+    const refresh = () => axios
+      .post<LoginResponse>(`${baseURL}/auth/refresh`, {}, { withCredentials: true })
+      .then((response) => response.data)
+    const locks = typeof navigator === "undefined"
+      ? undefined
+      : (navigator as Navigator & { locks?: { request<T>(name: string, callback: () => Promise<T>): Promise<T> } }).locks
+    const request = locks
+      ? locks.request("sport-booking-refresh-session", refresh)
+      : refresh()
+    refreshFlight = request.finally(() => { refreshFlight = null })
+  }
+  return refreshFlight
+}
+
 apiClient.interceptors.request.use((config) => {
   const token = tokenStorage.get()
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`
-  }
+  if (token) config.headers.Authorization = `Bearer ${token}`
   return config
 })
 
-/**
- * Response interceptor:
- * - 401: clear token storage AND dispatch a custom event so AuthContext
- *   can reset its in-memory state. This covers the case where a token
- *   expires after the initial mount (e.g., during a protected API call).
- *   Per doc section 7.1: "401 từ protected API đưa ứng dụng về trạng thái
- *   chưa xác thực theo policy đã review."
- * - 403: pass through; doc says 403 means authenticated but forbidden,
- *   must NOT silently convert to 401.
- */
 apiClient.interceptors.response.use(
   (response) => response,
-  (error: AxiosError<ApiErrorResponse>) => {
-    if (error.response?.status === 401) {
-      tokenStorage.clear()
-      // Notify AuthContext to reset in-memory user/token state
-      window.dispatchEvent(new CustomEvent("auth:unauthorized"))
+  async (error: AxiosError<ApiErrorResponse>) => {
+    const request = error.config as RetryableRequest | undefined
+    const path = request?.url ?? ""
+    const publicAuthCall = /\/auth\/(login|register|refresh|forgot-password|reset-password)$/.test(path)
+    if (error.response?.status !== 401 || !request || request.__authRetry || publicAuthCall) {
+      return Promise.reject(error)
     }
-    return Promise.reject(error)
+
+    request.__authRetry = true
+    try {
+      const session = await refreshSession()
+      const token = session.data.accessToken
+      tokenStorage.set(token)
+      request.headers.Authorization = `Bearer ${token}`
+      return apiClient(request)
+    } catch {
+      tokenStorage.clear()
+      window.dispatchEvent(new CustomEvent("auth:unauthorized"))
+      return Promise.reject(error)
+    }
   },
 )

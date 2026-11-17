@@ -7,7 +7,6 @@ export interface CreateBookingPayload {
   bookingDate: string   // YYYY-MM-DD
   timeSlotIds: string[] // Array of time_slot template UUIDs in chronological order
 }
-
 export type SlotStatus = "available" | "unavailable" | "past" | "booked" | "blackout"
 
 export interface BookingReviewHandoffData {
@@ -32,12 +31,3 @@ export interface BookingReviewHandoffData {
   }>
   payload: CreateBookingPayload
 }
-
-export type SimulationOutcome =
-  | "success"
-  | "error_conflict"
-  | "error_non_consecutive"
-  | "error_min_max"
-  | "error_limit_reached"
-  | "error_horizon_exceeded"
-  | "error_timeout"

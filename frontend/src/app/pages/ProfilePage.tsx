@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useState } from "react"
+import { type FormEvent, type ReactNode, useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import {
   Loader2, AlertCircle, Pencil, X, Check,
@@ -6,6 +6,7 @@ import {
   Lock, CheckCircle2,
 } from "lucide-react"
 import { useAuth } from "@/features/auth/useAuth"
+import { authApi } from "@/lib/api/auth"
 import { useProfile } from "@/features/profile/useProfile"
 import { useUpdateProfile, parseUpdateError } from "@/features/profile/useUpdateProfile"
 import type { UpdateProfileFieldErrors } from "@/features/profile/useUpdateProfile"
@@ -63,6 +64,60 @@ function EditableField({
         />
       </div>
       {error && <p id={`profile-err-${name}`} className="mt-1 text-xs text-red-500">{error}</p>}
+    </div>
+  )
+}
+
+function ChangePasswordPanel() {
+  const { logout } = useAuth()
+  const navigate = useNavigate()
+  const [currentPassword, setCurrentPassword] = useState("")
+  const [newPassword, setNewPassword] = useState("")
+  const [confirmation, setConfirmation] = useState("")
+  const [busy, setBusy] = useState(false)
+  const [message, setMessage] = useState("")
+  const [error, setError] = useState("")
+
+  async function submit(event: FormEvent) {
+    event.preventDefault()
+    setError("")
+    setMessage("")
+    if ([...newPassword].length < 8 || new TextEncoder().encode(newPassword).length > 72) {
+      setError("Mật khẩu mới cần ít nhất 8 ký tự và tối đa 72 byte UTF-8.")
+      return
+    }
+    if (newPassword !== confirmation) {
+      setError("Mật khẩu xác nhận không khớp.")
+      return
+    }
+    setBusy(true)
+    try {
+      await authApi.changePassword(currentPassword, newPassword)
+      setMessage("Đổi mật khẩu thành công. Tất cả phiên cũ đã bị thu hồi; vui lòng đăng nhập lại.")
+      logout()
+      navigate("/login", { replace: true, state: { passwordChanged: true } })
+    } catch (failure) {
+      const apiMessage = (failure as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message
+      setError(apiMessage ?? "Không thể đổi mật khẩu. Vui lòng thử lại.")
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+      <h2 className="text-base font-bold text-gray-900">Đổi mật khẩu</h2>
+      <p className="mt-1 text-sm text-gray-500">Sau khi đổi, bạn sẽ cần đăng nhập lại trên thiết bị này và các thiết bị khác.</p>
+      <form onSubmit={(event) => void submit(event)} className="mt-4 grid gap-3 sm:grid-cols-3">
+        <input required type="password" autoComplete="current-password" placeholder="Mật khẩu hiện tại" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} className="rounded-xl border border-gray-300 px-3 py-2.5 text-sm" />
+        <input required type="password" autoComplete="new-password" placeholder="Mật khẩu mới" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} className="rounded-xl border border-gray-300 px-3 py-2.5 text-sm" />
+        <input required type="password" autoComplete="new-password" placeholder="Nhập lại mật khẩu mới" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} className="rounded-xl border border-gray-300 px-3 py-2.5 text-sm" />
+        <div className="sm:col-span-3">
+          {error && <p role="alert" className="mb-3 text-sm text-red-700">{error}</p>}
+          {message && <p role="status" className="mb-3 text-sm text-emerald-700">{message}</p>}
+          <button disabled={busy} className="rounded-xl bg-[#B4FF00] px-5 py-2.5 text-sm font-bold text-gray-900 disabled:opacity-60">{busy ? "Đang cập nhật…" : "Cập nhật mật khẩu"}</button>
+        </div>
+      </form>
     </div>
   )
 }
@@ -388,6 +443,8 @@ export function ProfilePage() {
           )}
         </div>
       </div>
+
+      <ChangePasswordPanel />
 
       {/* Logout */}
       <div className="mt-6 flex justify-end">

@@ -1,4 +1,4 @@
-import { Link, useSearchParams } from "react-router-dom"
+import { Link, useLocation, useSearchParams } from "react-router-dom"
 import { AxiosError } from "axios"
 import { ArrowRight, Mail, Lock, Eye, EyeOff, CheckCircle2 } from "lucide-react"
 import { useState, type FormEvent, type ChangeEvent } from "react"
@@ -43,6 +43,8 @@ export function LoginPage() {
   const [apiError, setApiError] = useState<string | null>(null)
 
   const [searchParams] = useSearchParams()
+  const location = useLocation()
+  const passwordChanged = Boolean((location.state as { passwordChanged?: boolean } | null)?.passwordChanged)
   const justRegistered = searchParams.get("registered") === "1"
   const loginMutation = useLogin()
   const isLoading = loginMutation.isPending
@@ -142,6 +144,12 @@ export function LoginPage() {
               </div>
             )}
 
+            {passwordChanged && (
+              <div role="status" className="mt-5 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+                Mật khẩu đã được đổi. Vui lòng đăng nhập lại.
+              </div>
+            )}
+
             {/* API error */}
             {apiError && (
               <div role="alert" className="mt-5 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600 border border-red-200">
@@ -196,6 +204,12 @@ export function LoginPage() {
                   </button>
                 </div>
                 {fieldErrors.password && <p id="err-login-password" className="mt-1.5 text-xs text-red-500">{fieldErrors.password}</p>}
+              </div>
+
+              <div className="-mt-2 text-right">
+                <Link to="/forgot-password" className="text-xs font-semibold text-[#16A34A] hover:underline">
+                  Quên mật khẩu?
+                </Link>
               </div>
 
               {/* Submit */}

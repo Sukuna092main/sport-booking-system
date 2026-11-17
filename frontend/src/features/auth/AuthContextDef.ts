@@ -9,11 +9,11 @@ export interface AuthContextValue {
   user: User | null
   accessToken: string | null
   isAuthenticated: boolean
-  /** True while re-hydrating token from storage on mount */
+  /** True while restoring an HttpOnly-cookie session on mount */
   isLoading: boolean
-  /** Called after successful login — persists token + user */
+  /** Called after successful login — keeps only the short-lived token in memory */
   login(token: string, expiresAt: string, user: User): void
-  /** Clears token + user; per contract logout only clears client-side */
+  /** Revokes the current refresh session and clears client state */
   logout(): void
 }
 

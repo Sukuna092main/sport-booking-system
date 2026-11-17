@@ -10,7 +10,8 @@ import (
 )
 
 type Claims struct {
-	Role string `json:"role"`
+	Role        string `json:"role"`
+	AuthVersion int64  `json:"auth_version"`
 	jwt.RegisteredClaims
 }
 
@@ -26,9 +27,13 @@ func NewTokens(secret, issuer string, ttl time.Duration, now func() time.Time) *
 }
 
 func (t *Tokens) Issue(id, role string) (string, time.Time, error) {
+	return t.IssueVersion(id, role, 1)
+}
+
+func (t *Tokens) IssueVersion(id, role string, authVersion int64) (string, time.Time, error) {
 	now := t.now().UTC().Truncate(time.Second)
 	expires := now.Add(t.ttl)
-	claims := Claims{Role: role, RegisteredClaims: jwt.RegisteredClaims{
+	claims := Claims{Role: role, AuthVersion: authVersion, RegisteredClaims: jwt.RegisteredClaims{
 		Issuer: t.issuer, Subject: id, Audience: jwt.ClaimStrings{t.issuer},
 		IssuedAt: jwt.NewNumericDate(now), ExpiresAt: jwt.NewNumericDate(expires),
 	}}
@@ -44,7 +49,7 @@ func (t *Tokens) Verify(encoded string) (Claims, error) {
 	if err != nil {
 		return Claims{}, err
 	}
-	if !httpinput.UUID(claims.Subject) || (claims.Role != "USER" && claims.Role != "ADMIN") || claims.IssuedAt == nil {
+	if !httpinput.UUID(claims.Subject) || (claims.Role != "USER" && claims.Role != "ADMIN") || claims.IssuedAt == nil || claims.AuthVersion < 1 {
 		return Claims{}, fmt.Errorf("invalid identity claims")
 	}
 	return claims, nil

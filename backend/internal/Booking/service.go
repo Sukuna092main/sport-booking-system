@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/Sukuna092main/sport-booking-system/backend/internal/platform/apperror"
@@ -23,9 +24,29 @@ type Repository interface {
 	Cancel(context.Context, string, string, string) (Booking, error)
 }
 
-type Service struct{ repo Repository }
+type Options struct {
+	PaymentEnabled bool
+	DepositBPS     int
+	PaymentHoldTTL time.Duration
+}
+type Service struct {
+	repo    Repository
+	options Options
+}
 
-func NewService(repo Repository) *Service { return &Service{repo: repo} }
+func NewService(repo Repository, options ...Options) *Service {
+	value := Options{DepositBPS: 3000, PaymentHoldTTL: 10 * time.Minute}
+	if len(options) > 0 {
+		value = options[0]
+	}
+	if value.DepositBPS <= 0 {
+		value.DepositBPS = 3000
+	}
+	if value.PaymentHoldTTL <= 0 {
+		value.PaymentHoldTTL = 10 * time.Minute
+	}
+	return &Service{repo: repo, options: value}
+}
 
 func (s *Service) Create(ctx context.Context, customerID, key, requestID string, input CreateRequest) (Booking, bool, error) {
 	// Keys are opaque and scoped to a verified customer. Never trim or case-fold.
@@ -59,7 +80,8 @@ func (s *Service) Create(ctx context.Context, customerID, key, requestID string,
 		ids[i] = id
 	}
 	input.TimeSlotIDs = ids
-	return s.repo.Create(ctx, CreateCommand{CustomerID: customerID, Key: key, Hash: requestHash(input), RequestID: requestID, Request: input})
+	return s.repo.Create(ctx, CreateCommand{CustomerID: customerID, Key: key, Hash: requestHash(input), RequestID: requestID, Request: input,
+		PaymentEnabled: s.options.PaymentEnabled, DepositBPS: s.options.DepositBPS, PaymentHoldTTL: s.options.PaymentHoldTTL})
 }
 
 // Hash the semantic selection: UUID casing, JSON layout and slot array order do
@@ -79,8 +101,8 @@ func (s *Service) List(ctx context.Context, customerID string, query url.Values)
 		}
 	}
 	if values, ok := query["status"]; ok {
-		if values[0] != "CONFIRMED" && values[0] != "CANCELLED" {
-			return ListResult{}, apperror.Invalid("status", "Trạng thái phải là CONFIRMED hoặc CANCELLED.")
+		if values[0] != "PENDING_PAYMENT" && values[0] != "CONFIRMED" && values[0] != "CANCELLED" && values[0] != "EXPIRED" {
+			return ListResult{}, apperror.Invalid("status", "Trạng thái phải là PENDING_PAYMENT, CONFIRMED, CANCELLED hoặc EXPIRED.")
 		}
 		f.Status = values[0]
 	}
