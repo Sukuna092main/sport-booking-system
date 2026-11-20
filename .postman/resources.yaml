@@ -5,3 +5,7 @@ workspace:
 localResources:
   specs:
     - ../backend/internal/platform/openapi/openapi.yaml
+
+cloudResources:
+  collections:
+    ../postman/collections/Admin Court - Schedule - Blackout — QA Sprint 4: 4205f8c9-d525-4b09-980c-f307ed04856f

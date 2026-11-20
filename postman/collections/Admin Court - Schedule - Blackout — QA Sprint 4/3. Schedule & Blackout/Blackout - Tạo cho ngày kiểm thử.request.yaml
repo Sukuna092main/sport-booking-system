@@ -1,0 +1,27 @@
+$kind: http-request
+name: Blackout / Tạo cho ngày kiểm thử
+url: "{{baseUrl}}/admin/courts/{{courtId}}/blackouts"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "startsAt": "{{blackoutStart}}",
+      "endsAt": "{{blackoutEnd}}",
+      "reason": "QA S4 blackout"
+    }
+auth:
+  type: bearer
+  credentials:
+    token: "{{adminToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Tao blackout 201', () => pm.response.to.have.status(201));
+      const b = pm.response.json();
+      pm.collectionVariables.set('blackoutId', b.data.id);
+      pm.test('Co id', () => pm.expect(b.data.id).to.be.a('string').and.not.empty);
+    language: text/javascript
+order: 4000

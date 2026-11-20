@@ -23,6 +23,7 @@ func TestCORS(t *testing.T) {
 		{"unlisted_actual_keeps_auth", "GET", "https://other.example.test", "", "", 401, false},
 		{"same_origin_swagger_keeps_auth", "GET", "http://example.com", "", "", 401, false},
 		{"auth_preflight", "OPTIONS", allowed, "POST", "Content-Type", 204, true},
+		{"booking_preflight", "OPTIONS", allowed, "POST", "Authorization, Content-Type, Idempotency-Key", 204, true},
 		{"bearer_preflight", "OPTIONS", allowed, "GET", "Authorization, X-Request-ID", 204, true},
 		{"headers_case_insensitive", "OPTIONS", allowed, "PATCH", "content-TYPE, AUTHORIZATION", 204, true},
 		{"no_extra_headers", "OPTIONS", allowed, "DELETE", "", 204, true},
@@ -73,6 +74,9 @@ func TestCORS(t *testing.T) {
 				}
 				if rec.Header().Get("Access-Control-Allow-Methods") == "" || rec.Header().Get("Access-Control-Allow-Headers") == "" {
 					t.Fatal("missing preflight permission")
+				}
+				if tc.name == "booking_preflight" && !strings.Contains(rec.Header().Get("Access-Control-Allow-Headers"), "Idempotency-Key") {
+					t.Fatal("booking idempotency header not allowed")
 				}
 			} else {
 				var body map[string]any

@@ -49,7 +49,10 @@ func TestEmbeddedOpenAPIContract(t *testing.T) {
 		}
 	}
 	walk(spec)
-	expected := map[string]bool{"ping": true, "register": true, "login": true, "getMyProfile": true, "updateMyProfile": true, "listSportTypes": true, "listCourts": true, "getCourt": true, "getCourtAvailability": true}
+	expected := map[string]bool{"ping": true, "register": true, "login": true, "getMyProfile": true, "updateMyProfile": true, "listSportTypes": true, "listCourts": true, "getCourt": true, "getCourtAvailability": true, "createBooking": true, "listMyBookings": true, "getMyBooking": true, "cancelMyBooking": true, "listAdminSportTypes": true, "createSportType": true, "updateSportType": true, "deactivateSportType": true, "listAdminCourts": true, "createCourt": true, "updateCourt": true, "deactivateCourt": true, "getOperatingHours": true, "replaceOperatingHours": true, "listCourtBlackouts": true, "createCourtBlackout": true, "updateCourtBlackout": true, "deactivateCourtBlackout": true, "listAdminBookings": true, "getAdminBooking": true, "cancelAdminBooking": true, "getAdminStatistics": true}
+	for _, id := range []string{"refreshSession", "logout", "logoutAll", "forgotPassword", "resetPassword", "changePassword", "startBookingPayment", "getBookingPaymentStatus", "completeMockPayment", "vnpayIPN", "vnpayReturn", "getCourtPricing", "setCourtPricing"} {
+		expected[id] = true
+	}
 	seen := map[string]bool{}
 	for _, raw := range spec["paths"].(map[string]any) {
 		for method, value := range raw.(map[string]any) {

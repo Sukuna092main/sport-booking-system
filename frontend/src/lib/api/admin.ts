@@ -1,0 +1,228 @@
+import { apiClient } from "@/lib/api/client"
+import type {
+  CourtListResponse,
+  CourtPatch,
+  CourtResponse,
+  CourtWrite,
+  SportTypePatch,
+  SportTypeResponse,
+  SportTypeWrite,
+  SportTypesResponse,
+  AdminCourtQueryParams,
+} from "@/types/court.types"
+import type {
+  OperatingHoursResponse,
+  ReplaceOperatingHoursPayload,
+} from "@/types/schedule.types"
+import type {
+  BlackoutListResponse,
+  BlackoutPatch,
+  BlackoutResponse,
+  BlackoutWrite,
+} from "@/types/blackout.types"
+import type {
+  AdminBookingListResponse,
+  AdminBookingQueryParams,
+  AdminBookingResponse,
+  AdminCancelBookingPayload,
+  AdminStatisticsResponse,
+} from "@/types/adminBooking.types"
+
+/**
+ * Admin Inventory & Schedule API service — theo OpenAPI 0.5.0 contract.
+ *
+ * GET    /admin/sport-types               → 200 { data: SportType[] }
+ * POST   /admin/sport-types               → 201 { data: SportType }
+ * PATCH  /admin/sport-types/:sportTypeId  → 200 { data: SportType }
+ * DELETE /admin/sport-types/:sportTypeId  → 204 No Content (deactivate)
+ *
+ * GET    /admin/courts?page=&pageSize=    → 200 { data: Court[], meta: PageMeta }
+ * POST   /admin/courts                    → 201 { data: Court }
+ * PATCH  /admin/courts/:courtId           → 200 { data: Court }
+ * DELETE /admin/courts/:courtId           → 204 No Content (deactivate)
+ *
+ * GET    /admin/courts/:courtId/operating-hours → 200 { data: OperatingHoursData }
+ * PUT    /admin/courts/:courtId/operating-hours → 200 { data: OperatingHoursData }
+ *
+ * GET    /admin/courts/:courtId/blackouts       → 200 { data: Blackout[] }
+ * POST   /admin/courts/:courtId/blackouts       → 201 { data: Blackout }
+ * PATCH  /admin/courts/:courtId/blackouts/:id   → 200 { data: Blackout }
+ * DELETE /admin/courts/:courtId/blackouts/:id   → 204 No Content (deactivate)
+ */
+export const adminApi = {
+  /**
+   * GET /admin/sport-types
+   * Returns all sport types (active & inactive).
+   */
+  listSportTypes(): Promise<SportTypesResponse> {
+    return apiClient.get<SportTypesResponse>("/admin/sport-types").then((r) => r.data)
+  },
+
+  /**
+   * POST /admin/sport-types
+   * Creates a new sport type.
+   */
+  createSportType(payload: SportTypeWrite): Promise<SportTypeResponse> {
+    return apiClient.post<SportTypeResponse>("/admin/sport-types", payload).then((r) => r.data)
+  },
+
+  /**
+   * PATCH /admin/sport-types/:sportTypeId
+   * Updates an existing sport type (e.g. name, description, isActive).
+   */
+  updateSportType(sportTypeId: string, payload: SportTypePatch): Promise<SportTypeResponse> {
+    return apiClient.patch<SportTypeResponse>(`/admin/sport-types/${sportTypeId}`, payload).then((r) => r.data)
+  },
+
+  /**
+   * DELETE /admin/sport-types/:sportTypeId
+   * Deactivates sport type (soft delete, sets isActive=false).
+   */
+  deactivateSportType(sportTypeId: string): Promise<void> {
+    return apiClient.delete<void>(`/admin/sport-types/${sportTypeId}`).then((r) => r.data)
+  },
+
+  /**
+   * GET /admin/courts?page=&pageSize=
+   * Returns paginated list of all courts (active & inactive).
+   */
+  listCourts(params?: AdminCourtQueryParams): Promise<CourtListResponse> {
+    return apiClient.get<CourtListResponse>("/admin/courts", { params }).then((r) => r.data)
+  },
+
+  /**
+   * POST /admin/courts
+   * Creates a new court with slot configuration and optional reference price.
+   */
+  createCourt(payload: CourtWrite): Promise<CourtResponse> {
+    return apiClient.post<CourtResponse>("/admin/courts", payload).then((r) => r.data)
+  },
+
+  /**
+   * PATCH /admin/courts/:courtId
+   * Updates an existing court.
+   */
+  updateCourt(courtId: string, payload: CourtPatch): Promise<CourtResponse> {
+    return apiClient.patch<CourtResponse>(`/admin/courts/${courtId}`, payload).then((r) => r.data)
+  },
+
+  /**
+   * DELETE /admin/courts/:courtId
+   * Deactivates court (soft delete, sets isActive=false).
+   */
+  deactivateCourt(courtId: string): Promise<void> {
+    return apiClient.delete<void>(`/admin/courts/${courtId}`).then((r) => r.data)
+  },
+
+  /**
+   * GET /admin/courts/:courtId/operating-hours
+   * Xem lịch mở cửa và mẫu slot hiện hành của sân.
+   */
+  getOperatingHours(courtId: string): Promise<OperatingHoursResponse> {
+    return apiClient
+      .get<OperatingHoursResponse>(`/admin/courts/${courtId}/operating-hours`)
+      .then((r) => r.data)
+  },
+
+  /**
+   * PUT /admin/courts/:courtId/operating-hours
+   * Thay thế lịch mở cửa hằng tuần của sân và tái tạo mẫu slot hiện hành.
+   */
+  replaceOperatingHours(
+    courtId: string,
+    payload: ReplaceOperatingHoursPayload,
+  ): Promise<OperatingHoursResponse> {
+    return apiClient
+      .put<OperatingHoursResponse>(`/admin/courts/${courtId}/operating-hours`, payload)
+      .then((r) => r.data)
+  },
+
+  /**
+   * GET /admin/courts/:courtId/blackouts
+   * Danh sách lịch chặn của sân (gồm cả bản ghi active và inactive).
+   */
+  listCourtBlackouts(courtId: string): Promise<BlackoutListResponse> {
+    return apiClient
+      .get<BlackoutListResponse>(`/admin/courts/${courtId}/blackouts`)
+      .then((r) => r.data)
+  },
+
+  /**
+   * POST /admin/courts/:courtId/blackouts
+   * Tạo lịch chặn sân mới. Booking đã xác nhận không bị tự hủy.
+   */
+  createCourtBlackout(courtId: string, payload: BlackoutWrite): Promise<BlackoutResponse> {
+    return apiClient
+      .post<BlackoutResponse>(`/admin/courts/${courtId}/blackouts`, payload)
+      .then((r) => r.data)
+  },
+
+  /**
+   * PATCH /admin/courts/:courtId/blackouts/:blackoutId
+   * Sửa hoặc thay đổi trạng thái kích hoạt của lịch chặn.
+   */
+  updateCourtBlackout(
+    courtId: string,
+    blackoutId: string,
+    payload: BlackoutPatch,
+  ): Promise<BlackoutResponse> {
+    return apiClient
+      .patch<BlackoutResponse>(`/admin/courts/${courtId}/blackouts/${blackoutId}`, payload)
+      .then((r) => r.data)
+  },
+
+  /**
+   * DELETE /admin/courts/:courtId/blackouts/:blackoutId
+   * Tắt lịch chặn bằng xóa mềm (isActive=false, giữ lịch sử và audit log).
+   * Thao tác idempotent (gọi lại vẫn trả 204).
+   */
+  deactivateCourtBlackout(courtId: string, blackoutId: string): Promise<void> {
+    return apiClient
+      .delete<void>(`/admin/courts/${courtId}/blackouts/${blackoutId}`)
+      .then((r) => r.data)
+  },
+
+  /**
+   * GET /admin/bookings
+   * Tra cứu danh sách booking quản trị có phân trang và bộ lọc (courtId, date, status).
+   */
+  listBookings(params?: AdminBookingQueryParams): Promise<AdminBookingListResponse> {
+    return apiClient
+      .get<AdminBookingListResponse>("/admin/bookings", { params })
+      .then((r) => r.data)
+  },
+
+  /**
+   * GET /admin/bookings/:bookingId
+   * Chi tiết booking cho quản trị.
+   */
+  getBooking(bookingId: string): Promise<AdminBookingResponse> {
+    return apiClient
+      .get<AdminBookingResponse>(`/admin/bookings/${bookingId}`)
+      .then((r) => r.data)
+  },
+
+  /**
+   * POST /admin/bookings/:bookingId/cancel
+   * Admin hủy booking bị ảnh hưởng và ghi lý do vào audit log.
+   */
+  cancelBooking(
+    bookingId: string,
+    payload: AdminCancelBookingPayload,
+  ): Promise<AdminBookingResponse> {
+    return apiClient
+      .post<AdminBookingResponse>(`/admin/bookings/${bookingId}/cancel`, payload)
+      .then((r) => r.data)
+  },
+
+  /**
+   * GET /admin/statistics?from=YYYY-MM-DD&to=YYYY-MM-DD
+   * Thống kê số booking cơ bản.
+   */
+  getStatistics(params: { from: string; to: string }): Promise<AdminStatisticsResponse> {
+    return apiClient
+      .get<AdminStatisticsResponse>("/admin/statistics", { params })
+      .then((r) => r.data)
+  },
+}
+

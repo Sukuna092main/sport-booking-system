@@ -69,6 +69,7 @@ export function useCourtAvailability(courtId: string, date: string) {
     queryKey: courtAvailabilityQueryKey(courtId, date),
     queryFn: () => courtsApi.getAvailability(courtId, date).then((r) => r.data),
     staleTime: 1000 * 30, // 30 s — availability changes frequently
+    refetchInterval: 1000 * 30,
     enabled: !!courtId && !!date,
     retry: (failureCount, error) => {
       const status = (error as { response?: { status: number } })?.response?.status

@@ -54,6 +54,16 @@ export function AppLayout() {
           {/* Nav */}
           <nav className="hidden items-center gap-7 text-sm font-semibold sm:flex">
             <Link
+              to="/"
+              className={`pb-1 transition-all ${
+                location.pathname === "/"
+                  ? "border-b-2 border-[#16A34A] text-gray-900"
+                  : "text-gray-500 hover:text-gray-900"
+              }`}
+            >
+              Trang chủ
+            </Link>
+            <Link
               to="/courts"
               className={`pb-1 transition-all ${
                 location.pathname.startsWith("/courts")
@@ -61,28 +71,20 @@ export function AppLayout() {
                   : "text-gray-500 hover:text-gray-900"
               }`}
             >
-              Courts
+              Danh sách sân
             </Link>
-            <Link
-              to="/bookings"
-              className={`pb-1 transition-all ${
-                location.pathname === "/bookings"
-                  ? "border-b-2 border-[#16A34A] text-gray-900"
-                  : "text-gray-500 hover:text-gray-900"
-              }`}
-            >
-              Booking của tôi
-            </Link>
-            <Link
-              to="/bookings/review"
-              className={`pb-1 transition-all ${
-                location.pathname === "/bookings/review"
-                  ? "border-b-2 border-[#16A34A] text-gray-900"
-                  : "text-gray-500 hover:text-gray-900"
-              }`}
-            >
-              Review Handoff
-            </Link>
+            {isAuthenticated && (
+              <Link
+                to="/bookings"
+                className={`pb-1 transition-all ${
+                  location.pathname === "/bookings"
+                    ? "border-b-2 border-[#16A34A] text-gray-900"
+                    : "text-gray-500 hover:text-gray-900"
+                }`}
+              >
+                Booking của tôi
+              </Link>
+            )}
             {isAuthenticated && (
               <Link
                 to="/profile"
@@ -92,7 +94,19 @@ export function AppLayout() {
                     : "text-gray-500 hover:text-gray-900"
                 }`}
               >
-                Profile
+                Hồ sơ cá nhân
+              </Link>
+            )}
+            {user?.role === "ADMIN" && (
+              <Link
+                to="/admin"
+                className={`pb-1 transition-all ${
+                  location.pathname.startsWith("/admin")
+                    ? "border-b-2 border-[#16A34A] text-gray-900"
+                    : "text-gray-500 hover:text-gray-900"
+                }`}
+              >
+                Quản trị hệ thống
               </Link>
             )}
           </nav>
@@ -103,12 +117,18 @@ export function AppLayout() {
               <div className="h-8 w-24 animate-pulse rounded-full bg-gray-100" />
             ) : isAuthenticated ? (
               <>
-                <Link
-                  to="/admin"
-                  className="hidden rounded-xl border border-gray-200 bg-white px-3.5 py-1.5 text-xs font-bold text-gray-800 shadow-xs hover:bg-gray-50 transition-colors sm:inline-block"
-                >
-                  Admin
-                </Link>
+                {user?.role === "ADMIN" && (
+                  <Link
+                    to="/admin"
+                    className={`hidden rounded-xl border px-3.5 py-1.5 text-xs font-bold shadow-xs transition-colors sm:inline-block ${
+                      location.pathname.startsWith("/admin")
+                        ? "border-emerald-600 bg-emerald-50 text-emerald-800"
+                        : "border-gray-200 bg-white text-gray-800 hover:bg-gray-50"
+                    }`}
+                  >
+                    Admin
+                  </Link>
+                )}
                 <Link
                   to="/profile"
                   className="flex items-center gap-2.5 rounded-full border border-gray-200 bg-white py-1 pl-1.5 pr-3 text-xs shadow-xs hover:bg-gray-50 transition-colors"

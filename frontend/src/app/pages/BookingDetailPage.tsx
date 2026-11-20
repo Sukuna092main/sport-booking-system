@@ -12,19 +12,29 @@ import {
   XCircle,
   MapPin,
   Tag,
+  Info,
 } from "lucide-react"
+import { useAuth } from "@/features/auth/useAuth"
 import { useMyBooking, useCancelMyBooking } from "@/features/bookings/useBookings"
 import { useCourtById, useSportTypes } from "@/features/courts/useCourts"
 import { fmtTime, formatReferencePrice } from "@/features/bookings/consecutiveSlots"
+import {
+  checkBookingCancellationEligibility,
+  formatBookingDateDisplay,
+  parseCancelError,
+} from "@/features/bookings/cancellation"
 
 export function BookingDetailPage() {
   const { bookingId } = useParams<{ bookingId: string }>()
   const navigate = useNavigate()
+  const { user } = useAuth()
+
   const [copiedCode, setCopiedCode] = useState(false)
   const [copiedId, setCopiedId] = useState(false)
   const [showCancelModal, setShowCancelModal] = useState(false)
   const [cancelError, setCancelError] = useState<string | null>(null)
-  const [currentTime] = useState(() => Date.now())
+  const [successBanner, setSuccessBanner] = useState<string | null>(null)
+  const [now] = useState(() => Date.now())
 
   const { data: booking, isLoading, error } = useMyBooking(bookingId ?? "")
   const { data: court } = useCourtById(booking?.courtId ?? "")
@@ -34,38 +44,47 @@ export function BookingDetailPage() {
   const sportTypeMap = Object.fromEntries(
     (sportTypes ?? []).map((st) => [st.id, st.name])
   )
-  const sportName = court ? (sportTypeMap[court.sportTypeId] ?? "THỂ THAO") : "THỂ THAO"
+  const sportName = court ? sportTypeMap[court.sportTypeId] ?? "THỂ THAO" : "THỂ THAO"
 
+  // 1. Loading state
   if (isLoading) {
     return (
-      <section className="py-8">
-        <div className="flex items-center gap-2 text-sm text-gray-500">
-          <Loader2 className="h-4 w-4 animate-spin text-emerald-600" />
-          Đang tải thông tin booking…
+      <section className="py-12 max-w-4xl mx-auto">
+        <div className="flex flex-col items-center justify-center gap-3 text-sm text-gray-500">
+          <Loader2 className="h-6 w-6 animate-spin text-emerald-600" />
+          <span>Đang tải thông tin chi tiết booking…</span>
         </div>
       </section>
     )
   }
 
-  if (error || !booking) {
+  // 2. Ownership & Error / Not Found handling
+  // Per OpenAPI contract: Non-owned bookings return 404 to avoid leaking existence.
+  const isOwner =
+    !booking?.customerId || !user?.id || booking.customerId === user.id
+
+  if (error || !booking || !isOwner) {
     return (
-      <section className="py-8">
+      <section className="py-8 max-w-4xl mx-auto">
         <button
+          type="button"
           onClick={() => navigate("/bookings")}
           className="mb-4 flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-gray-900 transition-colors"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
           Quay lại danh sách Booking
         </button>
-        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-center">
-          <AlertTriangle className="mx-auto h-8 w-8 text-rose-500 mb-2" />
+
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-8 text-center shadow-xs">
+          <AlertTriangle className="mx-auto h-10 w-10 text-rose-500 mb-3" />
           <h2 className="text-base font-bold text-rose-900">Không tìm thấy thông tin đặt sân</h2>
-          <p className="mt-1 text-xs text-rose-700">
-            Booking không tồn tại hoặc bạn không có quyền truy cập thông tin này.
+          <p className="mt-1 text-xs text-rose-700 max-w-md mx-auto">
+            Booking không tồn tại hoặc bạn không có quyền truy cập vào thông tin này (404 Not Found).
           </p>
           <button
+            type="button"
             onClick={() => navigate("/bookings")}
-            className="mt-4 inline-flex items-center gap-2 rounded-xl bg-gray-900 px-4 py-2 text-xs font-bold text-white hover:bg-gray-800"
+            className="mt-5 inline-flex items-center gap-2 rounded-xl bg-gray-900 px-5 py-2.5 text-xs font-bold text-white hover:bg-gray-800 transition-colors"
           >
             Về trang Booking của tôi
           </button>
@@ -78,11 +97,16 @@ export function BookingDetailPage() {
   const sortedSlots = [...(booking.slots ?? [])].sort(
     (a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime()
   )
-  const firstSlotStart = sortedSlots.length > 0 ? new Date(sortedSlots[0].startsAt) : null
 
   const isConfirmed = booking.status === "CONFIRMED"
-  const isPastStart = firstSlotStart ? firstSlotStart.getTime() <= currentTime : false
-  const canCancel = isConfirmed && !isPastStart
+
+  // Check business rules for cancellation
+  const cancelEligibility = checkBookingCancellationEligibility(
+    booking,
+    user?.id,
+    now
+  )
+  const canCancel = cancelEligibility.canCancel
 
   const timeRangeText =
     sortedSlots.length > 0
@@ -95,13 +119,7 @@ export function BookingDetailPage() {
     slotCount
   )
 
-  const [by, bm, bd] = (booking.bookingDate || "").split("-").map(Number)
-  const bookingDateObj = by && bm && bd ? new Date(by, bm - 1, bd) : null
-  const formattedBookingDate = bookingDateObj
-    ? `${bookingDateObj.toLocaleDateString("vi-VN", {
-        weekday: "long",
-      })}, ${bookingDateObj.toLocaleDateString("vi-VN")}`
-    : booking.bookingDate
+  const formattedBookingDate = formatBookingDateDisplay(booking.bookingDate)
 
   function handleCopyCode() {
     if (booking?.bookingCode) {
@@ -122,17 +140,21 @@ export function BookingDetailPage() {
   async function handleConfirmCancel() {
     if (!booking) return
     setCancelError(null)
+
     try {
       await cancelMutation.mutateAsync(booking.id)
       setShowCancelModal(false)
+      setSuccessBanner(
+        `Hủy booking ${booking.bookingCode} thành công! Khung giờ của bạn đã được giải phóng trên hệ thống.`
+      )
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message
-      setCancelError(msg || "Không thể hủy booking. Vui lòng thử lại sau.")
+      const parsed = parseCancelError(err)
+      setCancelError(parsed.message)
     }
   }
 
   return (
-    <section className="py-4 max-w-4xl">
+    <section className="py-4 max-w-4xl mx-auto">
       {/* Top Navigation */}
       <div className="mb-4 flex items-center justify-between">
         <Link
@@ -149,6 +171,26 @@ export function BookingDetailPage() {
           Đặt thêm sân khác →
         </Link>
       </div>
+
+      {/* Success Notification Banner */}
+      {successBanner && (
+        <div
+          role="status"
+          className="mb-4 flex items-center justify-between rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-3 text-xs text-emerald-800 animate-in fade-in"
+        >
+          <div className="flex items-center gap-2 font-medium">
+            <CheckCircle className="h-4 w-4 text-emerald-600 shrink-0" />
+            <span>{successBanner}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setSuccessBanner(null)}
+            className="text-emerald-700 hover:text-emerald-900 text-xs font-bold"
+          >
+            Đóng
+          </button>
+        </div>
+      )}
 
       {/* Main Card */}
       <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
@@ -168,17 +210,18 @@ export function BookingDetailPage() {
               >
                 {isConfirmed ? (
                   <>
-                    <CheckCircle className="h-3 w-3 text-emerald-600" />
+                    <CheckCircle className="h-3.5 w-3.5 text-emerald-600" />
                     CONFIRMED
                   </>
                 ) : (
                   <>
-                    <XCircle className="h-3 w-3 text-gray-500" />
+                    <XCircle className="h-3.5 w-3.5 text-gray-500" />
                     CANCELLED
                   </>
                 )}
               </span>
             </div>
+
             <h1 className="mt-1 text-2xl font-black text-gray-900 flex items-center gap-2">
               <span>{booking.bookingCode}</span>
               <button
@@ -191,7 +234,8 @@ export function BookingDetailPage() {
               </button>
               {copiedCode && <span className="text-xs text-emerald-600 font-medium">Đã sao chép!</span>}
             </h1>
-            <p className="text-xs text-gray-400 font-mono mt-0.5 flex items-center gap-1.5">
+
+            <div className="text-xs text-gray-400 font-mono mt-0.5 flex items-center gap-1.5">
               <span>ID: {booking.id}</span>
               <button
                 type="button"
@@ -202,7 +246,7 @@ export function BookingDetailPage() {
                 <Copy className="h-3 w-3" />
               </button>
               {copiedId && <span className="text-[10px] text-emerald-600 font-sans">Đã sao chép</span>}
-            </p>
+            </div>
           </div>
 
           {/* Quick court badge */}
@@ -213,6 +257,9 @@ export function BookingDetailPage() {
             <p className="mt-0.5 text-base font-black text-gray-900">
               {court?.name ?? "Sân thể thao"}
             </p>
+            {court?.code && (
+              <p className="text-[11px] font-mono text-gray-400">Mã: {court.code}</p>
+            )}
           </div>
         </div>
 
@@ -223,16 +270,16 @@ export function BookingDetailPage() {
             <div className="rounded-xl border border-gray-100 bg-gray-50/50 p-4">
               <p className="text-[10px] font-bold uppercase text-gray-400">Ngày đặt</p>
               <p className="mt-1 text-sm font-bold text-gray-900 flex items-center gap-1.5">
-                <CalendarDays className="h-3.5 w-3.5 text-emerald-600" />
-                {formattedBookingDate}
+                <CalendarDays className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                <span className="truncate">{formattedBookingDate}</span>
               </p>
             </div>
 
             <div className="rounded-xl border border-gray-100 bg-gray-50/50 p-4">
               <p className="text-[10px] font-bold uppercase text-gray-400">Khung giờ</p>
               <p className="mt-1 text-sm font-bold text-gray-900 flex items-center gap-1.5">
-                <Clock className="h-3.5 w-3.5 text-emerald-600" />
-                {timeRangeText}
+                <Clock className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                <span>{timeRangeText}</span>
               </p>
             </div>
 
@@ -246,8 +293,8 @@ export function BookingDetailPage() {
             <div className="rounded-xl border border-gray-100 bg-gray-50/50 p-4">
               <p className="text-[10px] font-bold uppercase text-gray-400">Giá tham chiếu (MVP)</p>
               <p className="mt-1 text-sm font-bold text-gray-900 flex items-center gap-1.5">
-                <Tag className="h-3.5 w-3.5 text-emerald-600" />
-                {priceInfo.totalText}
+                <Tag className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                <span>{priceInfo.totalText}</span>
               </p>
             </div>
           </div>
@@ -274,28 +321,32 @@ export function BookingDetailPage() {
             </div>
           </div>
 
-          {/* Court location */}
+          {/* Court location card */}
           <div className="rounded-xl border border-gray-100 bg-gray-50/50 p-4 flex items-start gap-3">
-            <MapPin className="h-4 w-4 text-gray-400 shrink-0 mt-0.5" />
+            <MapPin className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
             <div className="text-xs">
-              <p className="font-bold text-gray-800">{court?.name} (Mã: {court?.code})</p>
-              <p className="text-gray-500 mt-0.5">{court?.description ?? "Khu liên hợp thể thao Riverside Sports Center"}</p>
+              <p className="font-bold text-gray-800">
+                {court?.name ?? "Sân thể thao"} {court?.code ? `(Mã: ${court.code})` : ""}
+              </p>
+              <p className="text-gray-500 mt-0.5">
+                {court?.description ?? "Khu liên hợp thể thao Riverside Sports Center"}
+              </p>
             </div>
           </div>
 
           {/* Timestamps & Audit Note */}
-          <div className="border-t border-gray-100 pt-4 flex flex-wrap items-center justify-between text-xs text-gray-400">
+          <div className="border-t border-gray-100 pt-4 flex flex-wrap items-center justify-between text-xs text-gray-400 gap-2">
             <div>
-              Thời điểm tạo: {new Date(booking.createdAt).toLocaleString("vi-VN")}
+              <span>Thời điểm tạo: {new Date(booking.createdAt).toLocaleString("vi-VN")}</span>
               {booking.cancelledAt && (
-                <span className="ml-3 text-rose-600">
+                <span className="ml-3 text-rose-600 font-medium">
                   · Thời điểm hủy: {new Date(booking.cancelledAt).toLocaleString("vi-VN")}
                 </span>
               )}
             </div>
             <div className="flex items-center gap-1.5 text-emerald-700">
               <ShieldCheck className="h-3.5 w-3.5" />
-              <span>Giao dịch atomic đảm bảo an toàn</span>
+              <span>Giao dịch atomic đảm bảo tính toàn vẹn</span>
             </div>
           </div>
         </div>
@@ -310,24 +361,30 @@ export function BookingDetailPage() {
             Quay lại danh sách
           </button>
 
+          {/* Cancel Action Button (only if eligible by business rules) */}
           {canCancel && (
             <button
               type="button"
-              onClick={() => setShowCancelModal(true)}
+              onClick={() => {
+                setCancelError(null)
+                setShowCancelModal(true)
+              }}
               className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-xs font-bold text-rose-700 hover:bg-rose-100 transition-colors"
             >
               Hủy booking này
             </button>
           )}
 
-          {!canCancel && isConfirmed && isPastStart && (
-            <span className="text-xs font-medium text-gray-400">
-              Không thể hủy booking sau thời điểm bắt đầu (SRS BR-14).
-            </span>
+          {/* Ineligible states info notes */}
+          {!canCancel && isConfirmed && cancelEligibility.code === "PAST_START_TIME" && (
+            <div className="flex items-center gap-1.5 text-xs font-medium text-amber-700 bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-200">
+              <Info className="h-3.5 w-3.5 shrink-0" />
+              <span>Không thể hủy booking sau thời điểm bắt đầu slot đầu tiên (SRS BR-14).</span>
+            </div>
           )}
 
           {!isConfirmed && (
-            <span className="text-xs font-medium text-gray-400">
+            <span className="text-xs font-medium text-gray-500 bg-gray-100 px-3 py-1.5 rounded-lg">
               Booking này đã bị hủy.
             </span>
           )}
@@ -336,16 +393,29 @@ export function BookingDetailPage() {
 
       {/* Cancel Confirmation Modal */}
       {showCancelModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl animate-in fade-in zoom-in-95">
             <div className="flex items-center gap-3 text-rose-600 mb-3">
-              <AlertTriangle className="h-6 w-6" />
-              <h3 className="text-lg font-black text-gray-900">Xác nhận hủy booking</h3>
+              <AlertTriangle className="h-6 w-6 shrink-0" />
+              <h3 className="text-lg font-black text-gray-900">Xác nhận hủy đặt sân</h3>
             </div>
+
             <p className="text-xs text-gray-600 leading-relaxed">
-              Bạn có chắc chắn muốn hủy booking <span className="font-mono font-bold text-gray-900">{booking.bookingCode}</span>?
-              Theo quy tắc MVP (SRS BR-14), thao tác này không thu phí và chỉ áp dụng trước giờ bắt đầu slot đầu tiên.
+              Bạn có chắc chắn muốn hủy booking{" "}
+              <span className="font-mono font-bold text-gray-900">{booking.bookingCode}</span>?
             </p>
+
+            {/* Modal Summary */}
+            <div className="my-3 rounded-xl border border-gray-100 bg-gray-50/80 p-3 text-xs space-y-1">
+              <p className="font-bold text-gray-900">{court?.name ?? "Sân thể thao"}</p>
+              <p className="text-gray-600 flex items-center gap-1.5">
+                <CalendarDays className="h-3.5 w-3.5 text-emerald-600" />
+                <span>{formattedBookingDate} ({timeRangeText})</span>
+              </p>
+              <p className="text-gray-500 text-[11px] pt-1.5 border-t border-gray-200/60">
+                Theo quy định hệ thống (SRS BR-14), thao tác này không thu phí và sẽ giải phóng các khung giờ cho người khác. Thao tác không thể hoàn tác.
+              </p>
+            </div>
 
             {cancelError && (
               <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
@@ -353,11 +423,14 @@ export function BookingDetailPage() {
               </div>
             )}
 
-            <div className="mt-6 flex items-center justify-end gap-2.5">
+            <div className="mt-5 flex items-center justify-end gap-2.5">
               <button
                 type="button"
                 disabled={cancelMutation.isPending}
-                onClick={() => setShowCancelModal(false)}
+                onClick={() => {
+                  setShowCancelModal(false)
+                  setCancelError(null)
+                }}
                 className="rounded-xl border border-gray-200 px-4 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50"
               >
                 Không, giữ booking

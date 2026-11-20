@@ -10,6 +10,7 @@ type User struct {
 	Phone        *string   `json:"phone"`
 	Role         string    `json:"role"`
 	Status       string    `json:"status"`
+	AuthVersion  int64     `json:"-"`
 	CreatedAt    time.Time `json:"createdAt"`
 	UpdatedAt    time.Time `json:"updatedAt"`
 }
