@@ -16,6 +16,14 @@ import (
 )
 
 func main() {
+	if len(os.Args) == 2 && os.Args[1] == "-check-config" {
+		if _, err := config.Load(); err != nil {
+			_, _ = fmt.Fprintf(os.Stderr, "configuration: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println("Configuration OK")
+		return
+	}
 	if err := run(); err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "api server: %v\n", err)
 		os.Exit(1)

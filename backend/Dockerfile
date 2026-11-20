@@ -9,6 +9,7 @@ RUN go mod download
 # Copy toàn bộ source rồi build binary
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -o /out/server ./cmd/api
+RUN CGO_ENABLED=0 GOOS=linux go build -o /out/worker ./cmd/worker
 
 # ---- Stage runtime (image nhỏ, chỉ chứa binary) ----
 FROM alpine:3.21
@@ -17,5 +18,6 @@ RUN adduser -D appuser
 USER appuser
 WORKDIR /app
 COPY --from=build /out/server /app/server
+COPY --from=build /out/worker /app/worker
 EXPOSE 8080
 CMD ["/app/server"]

@@ -9,7 +9,7 @@ import (
 )
 
 // CORS applies an exact origin allowlist for browser access without changing API authentication.
-func CORS(origins []string) gin.HandlerFunc {
+func CORS(origins []string, allowCredentials ...bool) gin.HandlerFunc {
 	allowedOrigins := make(map[string]bool, len(origins))
 	for _, origin := range origins {
 		allowedOrigins[origin] = true
@@ -51,6 +51,9 @@ func CORS(origins []string) gin.HandlerFunc {
 				}
 			}
 			c.Header("Access-Control-Allow-Origin", origin)
+			if len(allowCredentials) > 0 && allowCredentials[0] {
+				c.Header("Access-Control-Allow-Credentials", "true")
+			}
 			c.Header("Access-Control-Allow-Methods", "GET, HEAD, POST, PUT, PATCH, DELETE")
 			c.Header("Access-Control-Allow-Headers", "Authorization, Content-Type, Accept, X-Request-ID, Idempotency-Key")
 			c.Header("Access-Control-Max-Age", "600")
@@ -61,6 +64,9 @@ func CORS(origins []string) gin.HandlerFunc {
 		// retain normal behavior; CORS is not a replacement for JWT/role authorization.
 		if allowedOrigins[origin] {
 			c.Header("Access-Control-Allow-Origin", origin)
+			if len(allowCredentials) > 0 && allowCredentials[0] {
+				c.Header("Access-Control-Allow-Credentials", "true")
+			}
 			c.Header("Access-Control-Expose-Headers", "X-Request-ID")
 		}
 		c.Next()

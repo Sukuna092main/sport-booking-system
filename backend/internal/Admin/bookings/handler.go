@@ -18,8 +18,8 @@ type Handler struct{ service *Service }
 
 // Register requires the parent group to authenticate and authorize the current
 // database ADMIN role, exactly as the other administrative route modules do.
-func Register(routes *gin.RouterGroup, db *sql.DB, location *time.Location, now func() time.Time) {
-	h := &Handler{service: NewService(booking.NewRepository(db, location, now))}
+func Register(routes *gin.RouterGroup, db *sql.DB, location *time.Location, now func() time.Time, emailEnabled ...bool) {
+	h := &Handler{service: NewService(booking.NewRepository(db, location, now, emailEnabled...))}
 	routes.GET("/bookings", h.List)
 	routes.GET("/bookings/:bookingId", h.Detail)
 	routes.POST("/bookings/:bookingId/cancel", h.Cancel)

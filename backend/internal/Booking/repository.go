@@ -6,23 +6,30 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
 
 	availability "github.com/Sukuna092main/sport-booking-system/backend/internal/Availability"
+	notification "github.com/Sukuna092main/sport-booking-system/backend/internal/Notification"
 	"github.com/Sukuna092main/sport-booking-system/backend/internal/platform/apperror"
 )
 
 type SQLRepository struct {
-	db       *sql.DB
-	location *time.Location
-	now      func() time.Time
+	db           *sql.DB
+	location     *time.Location
+	now          func() time.Time
+	emailEnabled bool
 }
 
-func NewRepository(db *sql.DB, location *time.Location, now func() time.Time) *SQLRepository {
-	return &SQLRepository{db: db, location: location, now: now}
+func NewRepository(db *sql.DB, location *time.Location, now func() time.Time, emailEnabled ...bool) *SQLRepository {
+	var sendEmail bool
+	if len(emailEnabled) > 0 {
+		sendEmail = emailEnabled[0]
+	}
+	return &SQLRepository{db: db, location: location, now: now, emailEnabled: sendEmail}
 }
 
 // Every booking writer acquires customer -> court -> booking locks, in that
@@ -104,7 +111,8 @@ func (r *SQLRepository) Create(ctx context.Context, cmd CreateCommand) (value Bo
 		return Booking{}, false, err
 	}
 	var count int
-	err = tx.QueryRowContext(ctx, `SELECT count(*) FROM bookings b WHERE customer_id=$1 AND status='CONFIRMED'
+	err = tx.QueryRowContext(ctx, `SELECT count(*) FROM bookings b WHERE customer_id=$1
+		AND (status='CONFIRMED' OR (status='PENDING_PAYMENT' AND hold_expires_at>$2))
 		AND EXISTS (SELECT 1 FROM booking_slots bs WHERE bs.booking_id=b.id AND bs.released_at IS NULL AND bs.ends_at>$2)`, cmd.CustomerID, now).Scan(&count)
 	if err != nil {
 		return Booking{}, false, err
@@ -127,9 +135,45 @@ func (r *SQLRepository) Create(ctx context.Context, cmd CreateCommand) (value Bo
 	if err = tx.QueryRowContext(ctx, `SELECT gen_random_uuid()::text`).Scan(&id); err != nil {
 		return Booking{}, false, err
 	}
-	value = Booking{ID: id, BookingCode: "SB-" + strings.ToUpper(strings.ReplaceAll(id, "-", "")), CustomerID: cmd.CustomerID, CourtID: cmd.Request.CourtID, BookingDate: cmd.Request.BookingDate, Status: "CONFIRMED", Slots: slots, CreatedAt: now}
-	_, err = tx.ExecContext(ctx, `INSERT INTO bookings (id,customer_id,court_id,booking_code,booking_date,idempotency_key,request_hash,created_at)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`, id, value.CustomerID, value.CourtID, value.BookingCode, value.BookingDate, cmd.Key, cmd.Hash[:], now)
+	status := "CONFIRMED"
+	var holdExpires any
+	var totalAmount, depositAmount, remainingAmount any
+	if cmd.PaymentEnabled {
+		if cmd.DepositBPS < 1 || cmd.DepositBPS > 10000 {
+			return Booking{}, false, fmt.Errorf("invalid configured deposit basis points")
+		}
+		var price int64
+		err = tx.QueryRowContext(ctx, `SELECT price_per_slot_vnd FROM court_pricing WHERE court_id=$1 AND is_active FOR SHARE`, cmd.Request.CourtID).Scan(&price)
+		if errors.Is(err, sql.ErrNoRows) {
+			return Booking{}, false, ruleViolation("Sân chưa được quản trị viên cấu hình giá thanh toán.")
+		}
+		if err != nil {
+			return Booking{}, false, err
+		}
+		if price > math.MaxInt64/int64(len(slots)) {
+			return Booking{}, false, ruleViolation("Tổng giá trị booking vượt giới hạn cho phép.")
+		}
+		total := price * int64(len(slots))
+		deposit := (total/10000)*int64(cmd.DepositBPS) + ((total%10000)*int64(cmd.DepositBPS)+9999)/10000
+		if deposit < 1 || deposit > total || deposit > math.MaxInt64/100 {
+			return Booking{}, false, ruleViolation("Số tiền đặt cọc không hợp lệ.")
+		}
+		if cmd.PaymentProvider == "vnpay" && deposit < 5000 {
+			return Booking{}, false, ruleViolation("Tiền cọc qua VNPAY tối thiểu 5.000 VND.")
+		}
+		status = "PENDING_PAYMENT"
+		hold := now.Add(cmd.PaymentHoldTTL)
+		if slots[0].StartsAt.Before(hold) {
+			hold = slots[0].StartsAt
+		}
+		holdExpires = hold
+		totalAmount, depositAmount, remainingAmount = total, deposit, total-deposit
+		value.HoldExpiresAt, value.TotalAmountVND, value.DepositAmountVND, value.RemainingAmountVND = &hold, &total, &deposit, ptrInt64(total-deposit)
+	}
+	value = Booking{ID: id, BookingCode: "SB-" + strings.ToUpper(strings.ReplaceAll(id, "-", "")), CustomerID: cmd.CustomerID, CourtID: cmd.Request.CourtID, BookingDate: cmd.Request.BookingDate, Status: status, Slots: slots, CreatedAt: now,
+		HoldExpiresAt: value.HoldExpiresAt, TotalAmountVND: value.TotalAmountVND, DepositAmountVND: value.DepositAmountVND, RemainingAmountVND: value.RemainingAmountVND}
+	_, err = tx.ExecContext(ctx, `INSERT INTO bookings (id,customer_id,court_id,booking_code,booking_date,status,idempotency_key,request_hash,created_at,hold_expires_at,total_amount_vnd,deposit_amount_vnd,remaining_amount_vnd)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`, id, value.CustomerID, value.CourtID, value.BookingCode, value.BookingDate, status, cmd.Key, cmd.Hash[:], now, holdExpires, totalAmount, depositAmount, remainingAmount)
 	if err != nil {
 		return Booking{}, false, err
 	}
@@ -140,13 +184,25 @@ func (r *SQLRepository) Create(ctx context.Context, cmd CreateCommand) (value Bo
 			return Booking{}, false, err
 		}
 	}
-	if err = audit(ctx, tx, value.CustomerID, id, "BOOKING_CREATED", cmd.RequestID, `{"status":"CONFIRMED"}`, now); err != nil {
+	if err = audit(ctx, tx, value.CustomerID, id, "BOOKING_CREATED", cmd.RequestID, `{"status":"`+status+`"}`, now); err != nil {
 		return Booking{}, false, err
+	}
+	if status == "CONFIRMED" && r.emailEnabled {
+		if err = notification.QueueBookingMail(ctx, tx, id, "BOOKING_CONFIRMED", now, r.location); err != nil {
+			return Booking{}, false, err
+		}
+		firstStart := slots[0].StartsAt
+		remindAt := firstStart.Add(-24 * time.Hour)
+		if remindAt.After(now.Add(time.Minute)) {
+			if err = notification.QueueBookingMail(ctx, tx, id, "BOOKING_REMINDER_24H", remindAt, r.location); err != nil {
+				return Booking{}, false, err
+			}
+		}
 	}
 	return value, false, tx.Commit()
 }
 
-const bookingColumns = `b.id::text,b.booking_code,b.customer_id::text,b.court_id::text,b.booking_date::text,b.status,b.created_at,b.cancelled_at`
+const bookingColumns = `b.id::text,b.booking_code,b.customer_id::text,b.court_id::text,b.booking_date::text,b.status,b.created_at,b.cancelled_at,b.hold_expires_at,b.expired_at,b.total_amount_vnd,b.deposit_amount_vnd,b.remaining_amount_vnd`
 
 // Query booking parents before joining slots: LIMIT must paginate bookings,
 // not individual slots. Read all snapshots, including released/inactive ones.
@@ -162,9 +218,11 @@ func readBookings(ctx context.Context, tx *sql.Tx, parents string, args ...any) 
 	positions := make(map[string]int)
 	for rows.Next() {
 		var b Booking
+		var holdExpires, expired sql.NullTime
+		var total, deposit, remaining sql.NullInt64
 		var slotID *string
 		var start, end *time.Time
-		if err = rows.Scan(&b.ID, &b.BookingCode, &b.CustomerID, &b.CourtID, &b.BookingDate, &b.Status, &b.CreatedAt, &b.CancelledAt, &slotID, &start, &end); err != nil {
+		if err = rows.Scan(&b.ID, &b.BookingCode, &b.CustomerID, &b.CourtID, &b.BookingDate, &b.Status, &b.CreatedAt, &b.CancelledAt, &holdExpires, &expired, &total, &deposit, &remaining, &slotID, &start, &end); err != nil {
 			return nil, err
 		}
 		if slotID == nil || start == nil || end == nil {
@@ -180,6 +238,26 @@ func readBookings(ctx context.Context, tx *sql.Tx, parents string, args ...any) 
 				b.CancelledAt = &utc
 			}
 			b.Slots = make([]Slot, 0)
+			if holdExpires.Valid {
+				value := holdExpires.Time.UTC()
+				b.HoldExpiresAt = &value
+			}
+			if expired.Valid {
+				value := expired.Time.UTC()
+				b.ExpiredAt = &value
+			}
+			if total.Valid {
+				value := total.Int64
+				b.TotalAmountVND = &value
+			}
+			if deposit.Valid {
+				value := deposit.Int64
+				b.DepositAmountVND = &value
+			}
+			if remaining.Valid {
+				value := remaining.Int64
+				b.RemainingAmountVND = &value
+			}
 			result = append(result, b)
 		}
 		result[index].Slots = append(result[index].Slots, Slot{TimeSlotID: *slotID, StartsAt: start.UTC(), EndsAt: end.UTC()})
