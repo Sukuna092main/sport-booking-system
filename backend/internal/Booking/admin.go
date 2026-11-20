@@ -7,6 +7,7 @@ import (
 	"errors"
 	"time"
 
+	notification "github.com/Sukuna092main/sport-booking-system/backend/internal/Notification"
 	"github.com/Sukuna092main/sport-booking-system/backend/internal/platform/apperror"
 )
 
@@ -114,7 +115,7 @@ func (r *SQLRepository) AdminCancel(ctx context.Context, actorID, id, requestID,
 // owner, court, and booking locks and have loaded the verified target snapshots.
 func (r *SQLRepository) cancelLocked(ctx context.Context, tx *sql.Tx, value Booking, actorID, requestID string, reason *string) (Booking, error) {
 	now := r.now().UTC().Truncate(time.Microsecond)
-	if value.Status != "CONFIRMED" || !value.Slots[0].StartsAt.After(now) {
+	if (value.Status != "CONFIRMED" && value.Status != "PENDING_PAYMENT") || !value.Slots[0].StartsAt.After(now) {
 		return Booking{}, apperror.New(409, "cancellation_closed", "Chỉ được hủy trước thời điểm bắt đầu slot đầu tiên.")
 	}
 	if _, err := tx.ExecContext(ctx, `UPDATE bookings SET status='CANCELLED',cancelled_at=$2 WHERE id=$1`, value.ID, now); err != nil {
@@ -123,18 +124,28 @@ func (r *SQLRepository) cancelLocked(ctx context.Context, tx *sql.Tx, value Book
 	if _, err := tx.ExecContext(ctx, `UPDATE booking_slots SET released_at=$2 WHERE booking_id=$1 AND released_at IS NULL`, value.ID, now); err != nil {
 		return Booking{}, err
 	}
-	details := `{"previousStatus":"CONFIRMED","status":"CANCELLED"}`
+	if _, err := tx.ExecContext(ctx, `UPDATE payments SET status=CASE WHEN status='PAID' THEN 'PAID_REVIEW' ELSE 'EXPIRED' END,updated_at=$2
+		WHERE booking_id=$1 AND status IN ('PENDING','PAID')`, value.ID, now); err != nil {
+		return Booking{}, err
+	}
+	previousStatus := value.Status
+	details := `{"previousStatus":"` + previousStatus + `","status":"CANCELLED"}`
 	if reason != nil {
 		encoded, _ := json.Marshal(struct {
 			PreviousStatus string `json:"previousStatus"`
 			Status         string `json:"status"`
 			Reason         string `json:"reason"`
 			Result         string `json:"result"`
-		}{"CONFIRMED", "CANCELLED", *reason, "success"})
+		}{previousStatus, "CANCELLED", *reason, "success"})
 		details = string(encoded)
 	}
 	if err := audit(ctx, tx, actorID, value.ID, "BOOKING_CANCELLED", requestID, details, now); err != nil {
 		return Booking{}, err
+	}
+	if r.emailEnabled {
+		if err := notification.QueueBookingMail(ctx, tx, value.ID, "BOOKING_CANCELLED", now, r.location); err != nil {
+			return Booking{}, err
+		}
 	}
 	value.Status, value.CancelledAt = "CANCELLED", &now
 	return value, nil

@@ -82,8 +82,8 @@ func (s *Service) List(ctx context.Context, q url.Values) (booking.ListResult, e
 			}
 			f.Date = value
 		case "status":
-			if value != "CONFIRMED" && value != "CANCELLED" {
-				return booking.ListResult{}, apperror.Invalid(field, "Trạng thái phải là CONFIRMED hoặc CANCELLED.")
+			if value != "PENDING_PAYMENT" && value != "CONFIRMED" && value != "CANCELLED" && value != "EXPIRED" {
+				return booking.ListResult{}, apperror.Invalid(field, "Trạng thái booking không hợp lệ.")
 			}
 			f.Status = value
 		}

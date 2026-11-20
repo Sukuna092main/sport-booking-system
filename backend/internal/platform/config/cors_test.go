@@ -54,6 +54,7 @@ func TestCORSDefaults(t *testing.T) {
 		t.Fatal("local development origin defaults missing")
 	}
 	t.Setenv("APP_ENV", "production")
+	t.Setenv("FRONTEND_PUBLIC_URL", "https://frontend.example.test")
 	t.Setenv("DATABASE_URL", "postgresql://sport:test-only@db.example.test/sport_test?sslmode=require")
 	cfg, err = Load()
 	if err != nil || len(cfg.CORSAllowedOrigins) != 0 {

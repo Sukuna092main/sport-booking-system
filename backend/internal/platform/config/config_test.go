@@ -27,6 +27,7 @@ func TestConfiguration(t *testing.T) {
 		})
 	}
 	t.Setenv("APP_ENV", "production")
+	t.Setenv("FRONTEND_PUBLIC_URL", "https://frontend.example.test")
 	if _, err := Load(); err == nil {
 		t.Fatal("production allowed without TLS")
 	}
