@@ -46,4 +46,4 @@ foreach ($name in $generated.Keys) {
 [System.IO.File]::WriteAllText($envPath, $contents, [System.Text.UTF8Encoding]::new($false))
 Write-Host 'Da tao .env local voi secret ngau nhien. Khong chia se hoac commit file nay.'
 Write-Host 'Chay local bang Docker: docker compose up --build'
-Write-Host 'Email va VNPAY mac dinh tat; hay tu dien credential cua rieng ban neu can bat.'
+Write-Host 'Email va Stripe mac dinh tat; hay tu dien credential cua rieng ban neu can bat.'

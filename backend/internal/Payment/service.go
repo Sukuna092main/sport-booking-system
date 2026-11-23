@@ -3,12 +3,10 @@ package payment
 import (
 	"context"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/hex"
-	"fmt"
+	"errors"
 	"math"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 
@@ -19,23 +17,22 @@ import (
 type Options struct {
 	Enabled           bool
 	Provider          string
-	MockAllowed       bool
 	FrontendPublicURL string
 }
 type Service struct {
 	repo     *SQLRepository
 	gateway  Gateway
-	verifier WebhookVerifier
+	verifier *StripeGateway
 	options  Options
 	now      func() time.Time
 }
 
-func NewService(repo *SQLRepository, gateway Gateway, verifier WebhookVerifier, options Options, now func() time.Time) *Service {
+func NewService(repo *SQLRepository, gateway Gateway, verifier *StripeGateway, options Options, now func() time.Time) *Service {
 	if now == nil {
 		now = time.Now
 	}
 	if options.Provider == "" {
-		options.Provider = "mock"
+		options.Provider = "stripe"
 	}
 	return &Service{repo: repo, gateway: gateway, verifier: verifier, options: options, now: now}
 }
@@ -66,14 +63,12 @@ func (s *Service) StartCheckout(ctx context.Context, ownerID, bookingID, clientI
 	if value.CheckoutURL != nil && *value.CheckoutURL != "" {
 		return value, nil
 	}
-	if s.gateway.Name() == "vnpay" && value.AmountVND < 5000 {
-		_, _ = s.repo.db.ExecContext(ctx, `UPDATE payments SET status='FAILED',provider_response_code='AMOUNT_TOO_SMALL',updated_at=clock_timestamp() WHERE id=$1 AND status='PENDING'`, value.ID)
-		return Payment{}, apperror.New(http.StatusUnprocessableEntity, "payment_amount_too_small", "Tiền cọc phải tối thiểu 5.000 VND để thanh toán qua VNPAY.")
+	if value.HoldExpiresAt.Before(s.now().Add(30 * time.Minute)) {
+		return Payment{}, apperror.New(409, "payment_window_closed", "Không còn đủ 30 phút để tạo Stripe Checkout.")
 	}
-	checkout, err := s.gateway.CreatePayment(ctx, PaymentRequest{OrderRef: value.ProviderOrderRef, BookingCode: value.BookingCode, AmountVND: value.AmountVND, ClientIP: clientIP, ExpiresAt: value.HoldExpiresAt})
+	checkout, err := s.gateway.CreatePayment(ctx, PaymentRequest{BookingID: value.BookingID, OrderRef: value.ProviderOrderRef, BookingCode: value.BookingCode, AmountVND: value.AmountVND, ClientIP: clientIP, ExpiresAt: value.HoldExpiresAt})
 	if err != nil {
-		_, _ = s.repo.db.ExecContext(ctx, `UPDATE payments SET status='FAILED',updated_at=clock_timestamp() WHERE id=$1 AND status='PENDING'`, value.ID)
-		return Payment{}, err
+		return Payment{}, apperror.New(503, "provider_unavailable", "Chưa tạo được Stripe Checkout. Vui lòng thử lại cùng booking.")
 	}
 	if err = s.repo.SetCheckoutURL(ctx, value.ID, checkout); err != nil {
 		return Payment{}, err
@@ -89,44 +84,32 @@ func (s *Service) Status(ctx context.Context, ownerID, bookingID string) (Paymen
 	return s.repo.OwnedStatus(ctx, ownerID, bookingID)
 }
 
-func (s *Service) ProcessVNPAY(ctx context.Context, values url.Values) WebhookAck {
-	if s.options.Provider != "vnpay" || s.verifier == nil {
-		return WebhookAck{RspCode: "99", Message: "System error"}
+func (s *Service) ProcessStripe(ctx context.Context, body []byte, signature string) error {
+	if s.verifier == nil {
+		return apperror.New(503, "payment_unavailable", "Stripe chưa được cấu hình.")
 	}
-	event, err := s.verifier.Verify(values)
+	event, err := s.verifier.Verify(body, signature)
+	if errors.Is(err, ErrIgnoredStripeEvent) {
+		return nil
+	}
 	if err != nil {
-		return WebhookAck{RspCode: "97", Message: "Invalid signature"}
+		return apperror.New(400, "invalid_webhook", "Webhook Stripe không hợp lệ.")
 	}
-	ack, err := s.repo.ProcessEvent(ctx, "vnpay", event)
+	ack, err := s.repo.ProcessEvent(ctx, "stripe", event)
 	if err != nil {
-		return WebhookAck{RspCode: "99", Message: "System error"}
+		return err
 	}
-	return ack
-}
-
-func (s *Service) VerifyVNPAYReturn(values url.Values) (GatewayEvent, error) {
-	if s.options.Provider != "vnpay" || s.verifier == nil {
-		return GatewayEvent{}, fmt.Errorf("vnpay is not enabled")
+	if ack.RspCode != "00" && ack.RspCode != "02" {
+		return apperror.New(409, "payment_mismatch", "Thông tin thanh toán không khớp.")
 	}
-	return s.verifier.Verify(values)
-}
-
-func (s *Service) CompleteMock(ctx context.Context, ownerID, orderRef string, success bool) (WebhookAck, error) {
-	if !s.options.Enabled || !s.options.MockAllowed || s.options.Provider != "mock" {
-		return WebhookAck{}, apperror.New(http.StatusNotFound, "not_found", "Không tìm thấy giao dịch.")
-	}
-	event, err := s.repo.MockEvent(ctx, ownerID, orderRef, success)
-	if err != nil {
-		return WebhookAck{}, err
-	}
-	return s.repo.ProcessEvent(ctx, "mock", event)
+	return nil
 }
 
 func (s *Service) SetPricing(ctx context.Context, courtID, actorID, requestID string, value Pricing) (Pricing, error) {
 	if !httpinput.UUID(courtID) {
 		return Pricing{}, apperror.Invalid("courtId", "ID sân phải là UUID hợp lệ.")
 	}
-	if value.PricePerSlotVND < 1 || value.PricePerSlotVND > math.MaxInt64/100 {
+	if value.PricePerSlotVND < 1 || value.PricePerSlotVND > min(int64(9007199254740991), math.MaxInt64/100) {
 		return Pricing{}, apperror.Invalid("pricePerSlotVnd", "Giá mỗi slot phải là số nguyên VND dương trong phạm vi cho phép.")
 	}
 	return s.repo.SetPricing(ctx, courtID, actorID, requestID, value.PricePerSlotVND, value.IsActive)
@@ -137,25 +120,4 @@ func (s *Service) Pricing(ctx context.Context, courtID string) (Pricing, error) 
 		return Pricing{}, apperror.Invalid("courtId", "ID sân phải là UUID hợp lệ.")
 	}
 	return s.repo.GetPricing(ctx, courtID)
-}
-
-func (s *Service) ReturnRedirect(event GatewayEvent) string {
-	status := "failed"
-	if event.ResponseCode == "00" && event.TransactionStatus == "00" {
-		status = "pending"
-	}
-	u, err := url.Parse(strings.TrimRight(s.options.FrontendPublicURL, "/") + "/payment-result")
-	if err != nil {
-		return s.options.FrontendPublicURL
-	}
-	q := u.Query()
-	q.Set("ref", event.OrderRef)
-	q.Set("gateway", status)
-	u.RawQuery = q.Encode()
-	return u.String()
-}
-
-func mockEventKey(ref string, success bool) string {
-	sum := sha256.Sum256([]byte(fmt.Sprintf("mock:%s:%t", ref, success)))
-	return hex.EncodeToString(sum[:])
 }

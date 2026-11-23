@@ -36,7 +36,7 @@ CREATE INDEX idx_bookings_pending_expiry ON bookings (hold_expires_at)
 CREATE TABLE payments (
     id                       uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
     booking_id               uuid        NOT NULL REFERENCES bookings(id) ON DELETE RESTRICT,
-    provider                 text        NOT NULL CHECK (provider IN ('mock','vnpay')),
+    provider                 text        NOT NULL CHECK (provider IN ('stripe')),
     provider_order_ref       text        NOT NULL,
     amount_vnd               bigint      NOT NULL CHECK (amount_vnd > 0),
     currency                 text        NOT NULL DEFAULT 'VND' CHECK (currency = 'VND'),

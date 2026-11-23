@@ -154,17 +154,20 @@ func (r *SQLRepository) Create(ctx context.Context, cmd CreateCommand) (value Bo
 			return Booking{}, false, ruleViolation("Tổng giá trị booking vượt giới hạn cho phép.")
 		}
 		total := price * int64(len(slots))
+		if total > 9007199254740991 {
+			return Booking{}, false, ruleViolation("Số tiền vượt giới hạn chính xác của ứng dụng khách.")
+		}
 		deposit := (total/10000)*int64(cmd.DepositBPS) + ((total%10000)*int64(cmd.DepositBPS)+9999)/10000
 		if deposit < 1 || deposit > total || deposit > math.MaxInt64/100 {
 			return Booking{}, false, ruleViolation("Số tiền đặt cọc không hợp lệ.")
-		}
-		if cmd.PaymentProvider == "vnpay" && deposit < 5000 {
-			return Booking{}, false, ruleViolation("Tiền cọc qua VNPAY tối thiểu 5.000 VND.")
 		}
 		status = "PENDING_PAYMENT"
 		hold := now.Add(cmd.PaymentHoldTTL)
 		if slots[0].StartsAt.Before(hold) {
 			hold = slots[0].StartsAt
+		}
+		if hold.Before(now.Add(35 * time.Minute)) {
+			return Booking{}, false, ruleViolation("Cần ít nhất 35 phút trước giờ chơi để thanh toán Stripe.")
 		}
 		holdExpires = hold
 		totalAmount, depositAmount, remainingAmount = total, deposit, total-deposit

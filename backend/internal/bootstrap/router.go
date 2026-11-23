@@ -113,22 +113,18 @@ func newRouter(cfg config.Config, log *slog.Logger, db *sql.DB, now func() time.
 	myBookings.GET("/:bookingId", bookings.Detail)
 	myBookings.POST("/:bookingId/cancel", bookings.Cancel)
 	paymentRepository := payment.NewRepository(db, location, now, cfg.EmailEnabled)
+	var stripe *payment.StripeGateway
 	var gateway payment.Gateway
-	var verifier payment.WebhookVerifier
-	if cfg.PaymentProvider == "vnpay" {
-		vnpay := payment.NewVNPAYGateway(payment.VNPAYConfig{PaymentURL: cfg.VNPAYPaymentURL, TMNCode: cfg.VNPAYTMNCode, HashSecret: cfg.VNPAYHashSecret, ReturnURL: cfg.VNPAYReturnURL, Location: time.FixedZone("ICT", 7*3600)}, now)
-		gateway, verifier = vnpay, vnpay
-	} else {
-		gateway = payment.NewMockGateway(cfg.FrontendPublicURL)
+	if cfg.StripeSecretKey != "" && cfg.StripeWebhookSecret != "" {
+		stripe = payment.NewStripeGateway(cfg.StripeSecretKey, cfg.StripeWebhookSecret, cfg.FrontendPublicURL)
+		gateway = stripe
 	}
-	paymentService := payment.NewService(paymentRepository, gateway, verifier, payment.Options{Enabled: cfg.PaymentEnabled, Provider: cfg.PaymentProvider, MockAllowed: cfg.Environment != "production", FrontendPublicURL: cfg.FrontendPublicURL}, now)
+	paymentService := payment.NewService(paymentRepository, gateway, stripe, payment.Options{Enabled: cfg.PaymentEnabled, Provider: "stripe", FrontendPublicURL: cfg.FrontendPublicURL}, now)
+
 	paymentHandler := payment.NewHandler(paymentService)
 	myBookings.POST("/:bookingId/payments", paymentHandler.StartCheckout)
 	myBookings.GET("/:bookingId/payments", paymentHandler.Status)
-	mockPayments := v1.Group("/payments/mock", auth.Authenticate(users, tokens, sessions))
-	mockPayments.POST("/:orderRef/complete", paymentHandler.CompleteMock)
-	v1.GET("/payments/vnpay/return", paymentHandler.VNPAYReturn)
-	v1.GET("/payments/vnpay/ipn", paymentHandler.VNPAYIPN)
+	v1.POST("/payments/stripe/webhook", paymentHandler.StripeWebhook)
 	v1.GET("/courts/:courtId/pricing", paymentHandler.GetPricing)
 	admin := v1.Group("/admin", auth.Authenticate(users, tokens, sessions), auth.RequireRole("ADMIN"))
 	admininventory.Register(admin, db)

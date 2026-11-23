@@ -4,36 +4,30 @@ import (
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
-	"crypto/sha512"
-	"crypto/subtle"
 	"encoding/hex"
+	"encoding/json"
+	"errors"
 	"fmt"
-	"math"
-	"net"
+	"io"
+	"net/http"
 	"net/url"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
 )
 
 type PaymentRequest struct {
+	BookingID   string
 	OrderRef    string
 	BookingCode string
 	AmountVND   int64
 	ClientIP    string
 	ExpiresAt   time.Time
 }
-
 type Gateway interface {
 	Name() string
 	CreatePayment(context.Context, PaymentRequest) (string, error)
 }
-
-type WebhookVerifier interface {
-	Verify(url.Values) (GatewayEvent, error)
-}
-
 type GatewayEvent struct {
 	OrderRef          string
 	AmountMinor       int64
@@ -42,130 +36,126 @@ type GatewayEvent struct {
 	TransactionStatus string
 	EventKey          string
 }
-
-type MockGateway struct{ frontendURL string }
-
-func NewMockGateway(frontendURL string) *MockGateway {
-	return &MockGateway{frontendURL: strings.TrimRight(frontendURL, "/")}
+type StripeGateway struct {
+	secret        string
+	webhookSecret string
+	frontend      string
+	client        *http.Client
+	now           func() time.Time
 }
-func (g *MockGateway) Name() string { return "mock" }
-func (g *MockGateway) CreatePayment(_ context.Context, request PaymentRequest) (string, error) {
-	u, err := url.Parse(g.frontendURL + "/mock-payment")
+
+func NewStripeGateway(secret, webhookSecret, frontend string) *StripeGateway {
+	return &StripeGateway{secret: secret, webhookSecret: webhookSecret, frontend: strings.TrimRight(frontend, "/"), client: &http.Client{Timeout: 15 * time.Second}, now: time.Now}
+}
+func (g *StripeGateway) Name() string { return "stripe" }
+func (g *StripeGateway) CreatePayment(ctx context.Context, in PaymentRequest) (string, error) {
+	if in.AmountVND < 1 || in.ExpiresAt.Before(g.now().Add(30*time.Minute)) {
+		return "", fmt.Errorf("Stripe checkout requires at least 30 minutes remaining")
+	}
+	fields := url.Values{
+		"mode": {"payment"}, "allowed_payment_method_types[0]": {"card"},
+		"client_reference_id": {in.OrderRef}, "metadata[order_ref]": {in.OrderRef},
+		"line_items[0][price_data][currency]":           {"vnd"},
+		"line_items[0][price_data][unit_amount]":        {strconv.FormatInt(in.AmountVND, 10)},
+		"line_items[0][price_data][product_data][name]": {"Deposit " + in.BookingCode},
+		"line_items[0][quantity]":                       {"1"}, "expires_at": {strconv.FormatInt(in.ExpiresAt.Unix(), 10)},
+		"success_url": {g.frontend + "/payment-result?bookingId=" + url.QueryEscape(in.BookingID) + "&ref=" + url.QueryEscape(in.OrderRef) + "&gateway=pending&session_id={CHECKOUT_SESSION_ID}"},
+		"cancel_url":  {g.frontend + "/payment-result?bookingId=" + url.QueryEscape(in.BookingID) + "&ref=" + url.QueryEscape(in.OrderRef) + "&gateway=failed"},
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://api.stripe.com/v1/checkout/sessions", strings.NewReader(fields.Encode()))
 	if err != nil {
 		return "", err
 	}
-	q := u.Query()
-	q.Set("ref", request.OrderRef)
-	u.RawQuery = q.Encode()
-	return u.String(), nil
+	req.SetBasicAuth(g.secret, "")
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Idempotency-Key", in.OrderRef)
+	req.Header.Set("Stripe-Version", "2026-11-18.endive")
+	res, err := g.client.Do(req)
+	if err != nil {
+		return "", errors.New("Stripe checkout request failed")
+	}
+	defer res.Body.Close()
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		return "", fmt.Errorf("Stripe checkout returned HTTP %d", res.StatusCode)
+	}
+	var session struct {
+		ID  string
+		URL string
+	}
+	if err = json.NewDecoder(io.LimitReader(res.Body, 1<<20)).Decode(&session); err != nil {
+		return "", errors.New("invalid Stripe checkout response")
+	}
+	parsed, err := url.Parse(session.URL)
+	if err != nil || parsed.Scheme != "https" || parsed.Hostname() != "checkout.stripe.com" || session.ID == "" {
+		return "", errors.New("invalid Stripe checkout URL")
+	}
+	return session.URL, nil
 }
 
-type VNPAYConfig struct {
-	PaymentURL, TMNCode, HashSecret, ReturnURL string
-	Location                                   *time.Location
-}
-type VNPAYGateway struct {
-	config VNPAYConfig
-	now    func() time.Time
-}
+var ErrIgnoredStripeEvent = errors.New("ignored Stripe event")
 
-func NewVNPAYGateway(config VNPAYConfig, now func() time.Time) *VNPAYGateway {
-	if config.Location == nil {
-		config.Location = time.FixedZone("ICT", 7*3600)
-	}
-	if now == nil {
-		now = time.Now
-	}
-	return &VNPAYGateway{config: config, now: now}
-}
-func (g *VNPAYGateway) Name() string { return "vnpay" }
-
-func (g *VNPAYGateway) CreatePayment(_ context.Context, request PaymentRequest) (string, error) {
-	if request.AmountVND < 1 || request.AmountVND > math.MaxInt64/100 {
-		return "", fmt.Errorf("invalid vnpay amount")
-	}
-	ip := request.ClientIP
-	if host, _, err := net.SplitHostPort(ip); err == nil {
-		ip = host
-	}
-	if net.ParseIP(ip) == nil {
-		ip = "127.0.0.1"
-	}
-	now := g.now().In(g.config.Location)
-	params := map[string]string{
-		"vnp_Version": "2.1.0", "vnp_Command": "pay", "vnp_TmnCode": g.config.TMNCode,
-		"vnp_Amount": strconv.FormatInt(request.AmountVND*100, 10), "vnp_CurrCode": "VND", "vnp_TxnRef": request.OrderRef,
-		"vnp_OrderInfo": "Deposit for booking " + request.BookingCode, "vnp_OrderType": "other", "vnp_Locale": "vn",
-		"vnp_ReturnUrl": g.config.ReturnURL, "vnp_IpAddr": ip, "vnp_CreateDate": now.Format("20060102150405"),
-		"vnp_ExpireDate": request.ExpiresAt.In(g.config.Location).Format("20060102150405"),
-	}
-	return g.signedURL(params)
-}
-
-func (g *VNPAYGateway) signedURL(params map[string]string) (string, error) {
-	keys := make([]string, 0, len(params))
-	for k := range params {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	parts := make([]string, 0, len(keys))
-	for _, key := range keys {
-		value := params[key]
-		if value == "" {
-			continue
+func (g *StripeGateway) Verify(body []byte, signature string) (GatewayEvent, error) {
+	var timestamp string
+	var signatures []string
+	for _, part := range strings.Split(signature, ",") {
+		k, v, ok := strings.Cut(strings.TrimSpace(part), "=")
+		if ok && k == "t" {
+			if timestamp != "" {
+				return GatewayEvent{}, errors.New("duplicate timestamp")
+			}
+			timestamp = v
 		}
-		parts = append(parts, url.QueryEscape(key)+"="+url.QueryEscape(value))
-	}
-	hash := hmac.New(sha512.New, []byte(g.config.HashSecret))
-	_, _ = hash.Write([]byte(strings.Join(parts, "&")))
-	base := strings.TrimRight(g.config.PaymentURL, "?")
-	return base + "?" + strings.Join(parts, "&") + "&vnp_SecureHash=" + hex.EncodeToString(hash.Sum(nil)), nil
-}
-
-func (g *VNPAYGateway) Verify(values url.Values) (GatewayEvent, error) {
-	for key, items := range values {
-		if len(items) != 1 {
-			return GatewayEvent{}, fmt.Errorf("duplicate callback field %s", key)
+		if ok && k == "v1" {
+			signatures = append(signatures, v)
 		}
 	}
-	provided := values.Get("vnp_SecureHash")
-	if provided == "" {
-		return GatewayEvent{}, fmt.Errorf("missing vnpay signature")
+	stamp, err := strconv.ParseInt(timestamp, 10, 64)
+	if err != nil || g.webhookSecret == "" || g.now().Sub(time.Unix(stamp, 0)).Abs() > 5*time.Minute {
+		return GatewayEvent{}, errors.New("invalid Stripe timestamp")
 	}
-	params := make(map[string]string)
-	for key, items := range values {
-		if !strings.HasPrefix(key, "vnp_") || key == "vnp_SecureHash" || key == "vnp_SecureHashType" {
-			continue
-		}
-		if len(items) > 0 {
-			params[key] = items[0]
-		}
-	}
-	keys := make([]string, 0, len(params))
-	for k := range params {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	parts := make([]string, 0, len(keys))
-	for _, key := range keys {
-		if params[key] != "" {
-			parts = append(parts, url.QueryEscape(key)+"="+url.QueryEscape(params[key]))
+	mac := hmac.New(sha256.New, []byte(g.webhookSecret))
+	mac.Write([]byte(timestamp + "."))
+	mac.Write(body)
+	valid := false
+	for _, sig := range signatures {
+		decoded, e := hex.DecodeString(sig)
+		if e == nil && hmac.Equal(decoded, mac.Sum(nil)) {
+			valid = true
 		}
 	}
-	hash := hmac.New(sha512.New, []byte(g.config.HashSecret))
-	_, _ = hash.Write([]byte(strings.Join(parts, "&")))
-	expected := []byte(hex.EncodeToString(hash.Sum(nil)))
-	if len(provided) != len(expected) || subtle.ConstantTimeCompare([]byte(strings.ToLower(provided)), expected) != 1 {
-		return GatewayEvent{}, fmt.Errorf("invalid vnpay signature")
+	if !valid {
+		return GatewayEvent{}, errors.New("invalid Stripe signature")
 	}
-	if values.Get("vnp_TmnCode") != g.config.TMNCode {
-		return GatewayEvent{}, fmt.Errorf("invalid vnpay merchant")
+	var event struct {
+		ID   string
+		Type string
+		Data struct {
+			Object struct {
+				ID                string
+				Object            string
+				ClientReferenceID string `json:"client_reference_id"`
+				AmountTotal       int64  `json:"amount_total"`
+				Currency          string
+				PaymentStatus     string `json:"payment_status"`
+			}
+		}
 	}
-	amount, err := strconv.ParseInt(values.Get("vnp_Amount"), 10, 64)
-	if err != nil || amount < 1 || values.Get("vnp_TxnRef") == "" || values.Get("vnp_ResponseCode") == "" || values.Get("vnp_TransactionStatus") == "" || (values.Get("vnp_CurrCode") != "" && values.Get("vnp_CurrCode") != "VND") || (values.Get("vnp_ResponseCode") == "00" && values.Get("vnp_TransactionStatus") == "00" && (values.Get("vnp_TransactionNo") == "" || values.Get("vnp_TransactionNo") == "0")) {
-		return GatewayEvent{}, fmt.Errorf("invalid vnpay amount")
+	if err = json.Unmarshal(body, &event); err != nil {
+		return GatewayEvent{}, err
 	}
-	canonical := values.Encode()
-	digest := sha256.Sum256([]byte(canonical))
-	return GatewayEvent{OrderRef: values.Get("vnp_TxnRef"), AmountMinor: amount, TransactionID: values.Get("vnp_TransactionNo"), ResponseCode: values.Get("vnp_ResponseCode"), TransactionStatus: values.Get("vnp_TransactionStatus"), EventKey: hex.EncodeToString(digest[:])}, nil
+	if event.Type != "checkout.session.completed" && event.Type != "checkout.session.async_payment_succeeded" && event.Type != "checkout.session.async_payment_failed" && event.Type != "checkout.session.expired" {
+		return GatewayEvent{}, ErrIgnoredStripeEvent
+	}
+	s := event.Data.Object
+	if event.ID == "" || s.ID == "" || s.Object != "checkout.session" || s.ClientReferenceID == "" || s.Currency != "vnd" || s.AmountTotal < 1 {
+		return GatewayEvent{}, errors.New("invalid Stripe event data")
+	}
+	result := GatewayEvent{OrderRef: s.ClientReferenceID, AmountMinor: s.AmountTotal, TransactionID: s.ID, EventKey: event.ID, ResponseCode: "failed", TransactionStatus: "failed"}
+	if s.PaymentStatus == "paid" && (event.Type == "checkout.session.completed" || event.Type == "checkout.session.async_payment_succeeded") {
+		result.ResponseCode = "00"
+		result.TransactionStatus = "00"
+	} else if event.Type == "checkout.session.completed" {
+		return GatewayEvent{}, ErrIgnoredStripeEvent
+	}
+	return result, nil
 }

@@ -1,8 +1,8 @@
 package payment
 
 import (
+	"io"
 	"net/http"
-	"net/url"
 
 	"github.com/Sukuna092main/sport-booking-system/backend/internal/platform/apperror"
 	"github.com/Sukuna092main/sport-booking-system/backend/internal/platform/httpinput"
@@ -50,38 +50,18 @@ func (h *Handler) Status(c *gin.Context) {
 	response.Data(c, http.StatusOK, value)
 }
 
-func (h *Handler) CompleteMock(c *gin.Context) {
-	owner, ok := paymentActor(c)
-	if !ok {
+func (h *Handler) StripeWebhook(c *gin.Context) {
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 1<<20)
+	body, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		response.Error(c, 400, "invalid_webhook", "Webhook quá lớn hoặc không hợp lệ.")
 		return
 	}
-	var input struct {
-		Success bool `json:"success"`
-	}
-	if err := httpinput.JSON(c, &input); err != nil {
+	if err = h.service.ProcessStripe(c.Request.Context(), body, c.GetHeader("Stripe-Signature")); err != nil {
 		apperror.Write(c, err)
 		return
 	}
-	ack, err := h.service.CompleteMock(c.Request.Context(), owner, c.Param("orderRef"), input.Success)
-	if err != nil {
-		apperror.Write(c, err)
-		return
-	}
-	response.Data(c, http.StatusOK, ack)
-}
-
-func (h *Handler) VNPAYIPN(c *gin.Context) {
-	ack := h.service.ProcessVNPAY(c.Request.Context(), c.Request.URL.Query())
-	c.JSON(http.StatusOK, ack)
-}
-
-func (h *Handler) VNPAYReturn(c *gin.Context) {
-	event, err := h.service.VerifyVNPAYReturn(c.Request.URL.Query())
-	if err != nil {
-		c.Redirect(http.StatusSeeOther, h.service.ReturnRedirect(GatewayEvent{OrderRef: "", ResponseCode: "invalid", TransactionStatus: ""}))
-		return
-	}
-	c.Redirect(http.StatusSeeOther, h.service.ReturnRedirect(event))
+	c.JSON(200, gin.H{"received": true})
 }
 
 func (h *Handler) GetPricing(c *gin.Context) {
@@ -117,5 +97,3 @@ func (h *Handler) SetPricing(c *gin.Context) {
 	}
 	response.Data(c, http.StatusOK, value)
 }
-
-func ParseReturnQuery(raw string) url.Values { values, _ := url.ParseQuery(raw); return values }

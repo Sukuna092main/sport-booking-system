@@ -22,7 +22,7 @@ try {
         if ($qaLine -notmatch '^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=(.*)$') { continue }
         $qaName = $Matches[1]
         $qaValue = $Matches[2].Trim()
-        if ($qaName -notmatch '^(APP_[A-Z_]+|HTTP_[A-Z_]+|LOG_LEVEL|DATABASE_URL|DB_[A-Z_]+|JWT_[A-Z_]+|REFRESH_[A-Z_]+|PASSWORD_RESET_TTL|FRONTEND_PUBLIC_URL|CORS_ALLOWED_ORIGINS|PAYMENT_[A-Z_]+|VNPAY_[A-Z_]+|EMAIL_[A-Z_]+|SMTP_[A-Z_]+)$') { continue }
+        if ($qaName -notmatch '^(APP_[A-Z_]+|HTTP_[A-Z_]+|LOG_LEVEL|DATABASE_URL|DB_[A-Z_]+|JWT_[A-Z_]+|REFRESH_[A-Z_]+|PASSWORD_RESET_TTL|FRONTEND_PUBLIC_URL|CORS_ALLOWED_ORIGINS|PAYMENT_[A-Z_]+|STRIPE_[A-Z_]+|EMAIL_[A-Z_]+|SMTP_[A-Z_]+)$') { continue }
         if ($qaValue.Length -ge 2 -and (
             ($qaValue.StartsWith('"') -and $qaValue.EndsWith('"')) -or
             ($qaValue.StartsWith("'") -and $qaValue.EndsWith("'"))

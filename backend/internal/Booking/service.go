@@ -36,7 +36,7 @@ type Service struct {
 }
 
 func NewService(repo Repository, options ...Options) *Service {
-	value := Options{DepositBPS: 3000, PaymentHoldTTL: 10 * time.Minute}
+	value := Options{DepositBPS: 3000, PaymentHoldTTL: 35 * time.Minute}
 	if len(options) > 0 {
 		value = options[0]
 	}
@@ -44,7 +44,7 @@ func NewService(repo Repository, options ...Options) *Service {
 		value.DepositBPS = 3000
 	}
 	if value.PaymentHoldTTL <= 0 {
-		value.PaymentHoldTTL = 10 * time.Minute
+		value.PaymentHoldTTL = 35 * time.Minute
 	}
 	return &Service{repo: repo, options: value}
 }

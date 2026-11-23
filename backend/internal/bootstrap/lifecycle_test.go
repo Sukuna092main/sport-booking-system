@@ -2,9 +2,13 @@ package bootstrap
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -42,8 +46,8 @@ func TestBackendIntegrationLifecycle(t *testing.T) {
 		AppName: "lifecycle-test", Environment: "test", AppTimezone: "Asia/Ho_Chi_Minh",
 		JWTSecret: strings.Repeat("t", 32), JWTTTL: 15 * time.Minute,
 		RefreshTokenTTL: time.Hour, PasswordResetTTL: 15 * time.Minute, FrontendPublicURL: "http://localhost:5173",
-		PaymentEnabled: true, PaymentProvider: "mock", PaymentDepositBPS: 3000, PaymentHoldTTL: 10 * time.Minute,
-		EmailEnabled: true, EmailEncryptionKey: key, CORSAllowedOrigins: []string{"http://localhost:5173"},
+		PaymentEnabled: true, PaymentProvider: "stripe", PaymentDepositBPS: 3000, PaymentHoldTTL: 35 * time.Minute,
+		StripeSecretKey: "sk_test_fixture", StripeWebhookSecret: "whsec_fixture", EmailEnabled: true, EmailEncryptionKey: key, CORSAllowedOrigins: []string{"http://localhost:5173"},
 	}
 	r := newRouter(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)), db, now)
 	call := func(method, path, body, bearer string, cookie *http.Cookie, want int) (*http.Cookie, map[string]any) {
@@ -145,15 +149,49 @@ func TestBackendIntegrationLifecycle(t *testing.T) {
 		t.Fatalf("unexpected booking: %+v", book)
 	}
 	path := "/bookings/" + book.ID
-	_, attempt := call("POST", path+"/payments", "", access, nil, 201)
-	_, same := call("POST", path+"/payments", "", access, nil, 201)
-	if attempt["id"] != same["id"] {
-		t.Fatal("checkout retry created another attempt")
+	_, otherToken := registerLogin(t, r, "other-payment@example.test")
+	call("GET", path+"/payments", "", otherToken, nil, 404)
+	_, beforePayment := call("GET", path+"/payments", "", access, nil, 200)
+	if beforePayment["bookingId"] != book.ID || beforePayment["depositAmountVnd"] != float64(15000) || beforePayment["holdExpiresAt"] == nil {
+		t.Fatal("payment status missing FE data")
 	}
-	complete := "/payments/mock/" + attempt["providerOrderRef"].(string) + "/complete"
-	call("POST", complete, `{"success":true}`, access, nil, 200)
-	call("POST", complete, `{"success":true}`, access, nil, 200)
+
+	repo := payment.NewRepository(db, nil, now, true)
+	attempt, _, err := repo.StartAttempt(context.Background(), book.CustomerID, book.ID, "stripe", "test_order_paid")
+	if err != nil {
+		t.Fatal(err)
+	}
+	same, _, err := repo.StartAttempt(context.Background(), book.CustomerID, book.ID, "stripe", "unused_retry_ref")
+	if err != nil || same.ID != attempt.ID {
+		t.Fatal("attempt retry", err)
+	}
+	webhook := func(order string, amount int64, eventID, sessionID string) {
+		t.Helper()
+		body, _ := json.Marshal(map[string]any{"id": eventID, "type": "checkout.session.completed", "data": map[string]any{"object": map[string]any{"id": sessionID, "object": "checkout.session", "client_reference_id": order, "amount_total": amount, "currency": "vnd", "payment_status": "paid"}}})
+		stamp := fmt.Sprint(time.Now().Unix())
+		mac := hmac.New(sha256.New, []byte("whsec_fixture"))
+		mac.Write([]byte(stamp + "."))
+		mac.Write(body)
+		req := httptest.NewRequest("POST", "/api/v1/payments/stripe/webhook", strings.NewReader(string(body)))
+		req.Header.Set("Stripe-Signature", "t="+stamp+",v1="+hex.EncodeToString(mac.Sum(nil)))
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+		if rec.Code != 200 {
+			t.Fatalf("webhook %d: %s", rec.Code, rec.Body.String())
+		}
+	}
+	webhook(attempt.ProviderOrderRef, attempt.AmountVND, "evt_paid", "cs_paid")
+	webhook(attempt.ProviderOrderRef, attempt.AmountVND, "evt_paid", "cs_paid")
+
 	final := mustBooking(t, r, "GET", "/api/v1"+path, "", access, "", 200)
+	_, paidSummary := call("GET", path+"/payments", "", access, nil, 200)
+	if paidSummary["bookingStatus"] != "CONFIRMED" || paidSummary["totalAmountVnd"] != float64(50000) || paidSummary["remainingAmountVnd"] != float64(35000) {
+		t.Fatal("incorrect paid summary")
+	}
+	paymentData, ok := paidSummary["payment"].(map[string]any)
+	if !ok || paymentData["provider"] != "stripe" || paymentData["status"] != "PAID" || paymentData["paidAt"] == nil {
+		t.Fatal("payment status missing settlement data")
+	}
 	if final.Status != "CONFIRMED" {
 		t.Fatal(final.Status)
 	}
@@ -177,13 +215,17 @@ func TestBackendIntegrationLifecycle(t *testing.T) {
 	}
 
 	pending := mustBooking(t, r, "POST", "/api/v1/bookings", bookingBody(t, fixtureCourt, "2026-10-10", slots[1:]), access, "unpaid-lifecycle", 201)
-	_, late := call("POST", "/bookings/"+pending.ID+"/payments", "", access, nil, 201)
-	clock = clock.Add(11 * time.Minute)
-	repo := payment.NewRepository(db, nil, now, true)
+	late, _, err := repo.StartAttempt(context.Background(), pending.CustomerID, pending.ID, "stripe", "test_order_late")
+	if err != nil {
+		t.Fatal(err)
+	}
+	clock = clock.Add(36 * time.Minute)
 	if count, err := repo.ExpireHolds(context.Background(), 100); err != nil || count != 1 {
 		t.Fatalf("expiry count=%d err=%v", count, err)
 	}
-	call("POST", "/payments/mock/"+late["providerOrderRef"].(string)+"/complete", `{"success":true}`, access, nil, 200)
+	webhook(late.ProviderOrderRef, late.AmountVND, "evt_late", "cs_late")
+
+	_, access = login("changedPassword123")
 	expired := mustBooking(t, r, "GET", "/api/v1/bookings/"+pending.ID, "", access, "", 200)
 	if expired.Status != "EXPIRED" {
 		t.Fatal(expired.Status)

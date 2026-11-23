@@ -33,6 +33,9 @@ func NewRepository(db *sql.DB, location *time.Location, now func() time.Time, em
 }
 
 func (r *SQLRepository) StartAttempt(ctx context.Context, ownerID, bookingID, provider, orderRef string) (Payment, bool, error) {
+	if provider != "stripe" {
+		return Payment{}, false, apperror.New(400, "unsupported_provider", "Chỉ hỗ trợ Stripe.")
+	}
 	tx, err := r.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
 	if err != nil {
 		return Payment{}, false, err
@@ -97,7 +100,7 @@ func scanPayment(row scanner) (Payment, error) {
 }
 
 func (r *SQLRepository) SetCheckoutURL(ctx context.Context, id, value string) error {
-	result, err := r.db.ExecContext(ctx, `UPDATE payments SET checkout_url=$2,updated_at=clock_timestamp() WHERE id=$1 AND status='PENDING'`, id, value)
+	result, err := r.db.ExecContext(ctx, `UPDATE payments SET checkout_url=COALESCE(checkout_url,$2),updated_at=clock_timestamp() WHERE id=$1 AND status='PENDING'`, id, value)
 	if err != nil {
 		return err
 	}
@@ -108,31 +111,15 @@ func (r *SQLRepository) SetCheckoutURL(ctx context.Context, id, value string) er
 	return nil
 }
 
-func (r *SQLRepository) MockEvent(ctx context.Context, ownerID, orderRef string, success bool) (GatewayEvent, error) {
-	var amount int64
-	err := r.db.QueryRowContext(ctx, `SELECT p.amount_vnd FROM payments p JOIN bookings b ON b.id=p.booking_id
-		WHERE p.provider_order_ref=$1 AND p.provider='mock' AND b.customer_id=$2`, orderRef, ownerID).Scan(&amount)
-	if errors.Is(err, sql.ErrNoRows) {
-		return GatewayEvent{}, apperror.New(404, "not_found", "Không tìm thấy giao dịch.")
-	}
-	if err != nil {
-		return GatewayEvent{}, err
-	}
-	if amount > int64(^uint64(0)>>1)/100 {
-		return GatewayEvent{}, fmt.Errorf("mock amount overflow")
-	}
-	event := GatewayEvent{OrderRef: orderRef, AmountMinor: amount * 100, TransactionID: "MOCK-" + orderRef, ResponseCode: "24", TransactionStatus: "02", EventKey: mockEventKey(orderRef, success)}
-	if success {
-		event.ResponseCode = "00"
-		event.TransactionStatus = "00"
-	}
-	return event, nil
-}
-
 func (r *SQLRepository) OwnedStatus(ctx context.Context, ownerID, bookingID string) (PaymentStatus, error) {
 	var value PaymentStatus
+	tx, err := r.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
+	if err != nil {
+		return value, err
+	}
+	defer tx.Rollback()
 	var hold sql.NullTime
-	err := r.db.QueryRowContext(ctx, `SELECT id::text,status,hold_expires_at,COALESCE(total_amount_vnd,0),COALESCE(deposit_amount_vnd,0),COALESCE(remaining_amount_vnd,0)
+	err = tx.QueryRowContext(ctx, `SELECT id::text,status,hold_expires_at,COALESCE(total_amount_vnd,0),COALESCE(deposit_amount_vnd,0),COALESCE(remaining_amount_vnd,0)
 		FROM bookings WHERE id=$1 AND customer_id=$2`, bookingID, ownerID).Scan(&value.BookingID, &value.BookingStatus, &hold, &value.TotalAmountVND, &value.DepositAmountVND, &value.RemainingAmountVND)
 	if errors.Is(err, sql.ErrNoRows) {
 		return value, apperror.New(404, "not_found", "Không tìm thấy booking.")
@@ -144,14 +131,14 @@ func (r *SQLRepository) OwnedStatus(ctx context.Context, ownerID, bookingID stri
 		t := hold.Time.UTC()
 		value.HoldExpiresAt = &t
 	}
-	paymentValue, err := scanPayment(r.db.QueryRowContext(ctx, `SELECT id::text,booking_id::text,provider,provider_order_ref,amount_vnd,currency,status,checkout_url,created_at,paid_at
+	paymentValue, err := scanPayment(tx.QueryRowContext(ctx, `SELECT id::text,booking_id::text,provider,provider_order_ref,amount_vnd,currency,status,checkout_url,created_at,paid_at
 		FROM payments WHERE booking_id=$1 ORDER BY created_at DESC LIMIT 1`, bookingID))
 	if err == nil {
 		value.Payment = &paymentValue
 	} else if !errors.Is(err, sql.ErrNoRows) {
 		return value, err
 	}
-	return value, nil
+	return value, tx.Commit()
 }
 
 func (r *SQLRepository) SetPricing(ctx context.Context, courtID, actorID, requestID string, price int64, active bool) (Pricing, error) {
@@ -240,7 +227,7 @@ func (r *SQLRepository) ProcessEvent(ctx context.Context, provider string, event
 	if provider != storedProvider {
 		return finishAck(ctx, tx, provider, event.EventKey, WebhookAck{RspCode: "01", Message: "Order not found"})
 	}
-	if event.AmountMinor%100 != 0 || event.AmountMinor/100 != amount {
+	if event.AmountMinor != amount {
 		return finishAck(ctx, tx, provider, event.EventKey, WebhookAck{RspCode: "04", Message: "Invalid amount"})
 	}
 	if event.ResponseCode == "00" && event.TransactionStatus == "00" {
@@ -291,10 +278,6 @@ func (r *SQLRepository) ProcessEvent(ctx context.Context, provider string, event
 					}
 				}
 			}
-		}
-	} else if (event.ResponseCode == "07" || event.TransactionStatus == "07") && current.Status == "PENDING" {
-		if _, err = tx.ExecContext(ctx, `UPDATE payments SET status='PAID_REVIEW',provider_transaction_id=NULLIF($2,''),provider_response_code=$3,paid_at=clock_timestamp(),updated_at=clock_timestamp() WHERE id=$1`, paymentID, event.TransactionID, event.ResponseCode); err != nil {
-			return WebhookAck{RspCode: "99", Message: "System error"}, err
 		}
 	} else if current.Status == "PENDING" {
 		if _, err = tx.ExecContext(ctx, `UPDATE payments SET status='FAILED',provider_response_code=$2,updated_at=clock_timestamp() WHERE id=$1`, paymentID, event.ResponseCode); err != nil {

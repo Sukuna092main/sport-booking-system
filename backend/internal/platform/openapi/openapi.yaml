@@ -482,7 +482,7 @@ paths:
                     properties:
                       id: { type: string, format: uuid }
                       bookingId: { type: string, format: uuid }
-                      provider: { type: string, enum: [mock, vnpay] }
+                      provider: { type: string, enum: [stripe] }
                       providerOrderRef: { type: string }
                       amountVnd: { type: integer, format: int64 }
                       currency: { type: string, example: VND }
@@ -510,52 +510,56 @@ paths:
                     type: object
                     properties:
                       bookingId: { type: string, format: uuid }
-                      bookingStatus: { type: string }
+                      bookingStatus: { $ref: '#/components/schemas/BookingStatus' }
+                      holdExpiresAt: { type: string, format: date-time }
                       totalAmountVnd: { type: integer, format: int64 }
                       depositAmountVnd: { type: integer, format: int64 }
                       remainingAmountVnd: { type: integer, format: int64 }
-                      payment: { type: object, nullable: true }
+                      payment:
+                        type: object
+                        nullable: true
+                        properties:
+                          id: { type: string, format: uuid }
+                          bookingId: { type: string, format: uuid }
+                          provider: { type: string, description: Stripe for new transactions. Historical provider values remain readable. }
+                          providerOrderRef: { type: string }
+                          amountVnd: { type: integer, format: int64 }
+                          currency: { type: string, enum: [VND] }
+                          status: { type: string, enum: [PENDING, PAID, FAILED, EXPIRED, PAID_REVIEW] }
+                          checkoutUrl: { type: string, format: uri }
+                          createdAt: { type: string, format: date-time }
+                          paidAt: { type: string, format: date-time }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
-  /payments/mock/{orderRef}/complete:
+  /payments/stripe/webhook:
     post:
       tags: [Payments]
-      summary: Hoàn tất giao dịch mô phỏng trong development
-      operationId: completeMockPayment
+      summary: Stripe Checkout webhook
+      description: Verifies the raw request body and Stripe-Signature. Paid sessions confirm matching pending bookings. Replayed events are deduplicated.
+      operationId: stripeWebhook
       x-implementation-status: implemented
-      security: [{ bearerAuth: [] }]
       parameters:
-        - name: orderRef
-          in: path
+        - in: header
+          name: Stripe-Signature
           required: true
           schema: { type: string }
       requestBody:
         required: true
         content:
           application/json:
-            schema:
-              type: object
-              required: [success]
-              properties: { success: { type: boolean } }
+            schema: { type: object, additionalProperties: true }
       responses:
-        '200': { description: Giao dịch mô phỏng đã được xử lý. }
-        '404': { $ref: '#/components/responses/NotFound' }
-  /payments/vnpay/ipn:
-    get:
-      tags: [Payments]
-      summary: Callback IPN xác minh chữ ký VNPAY
-      operationId: vnpayIPN
-      x-implementation-status: implemented
-      responses:
-        '200': { description: Mã xác nhận IPN theo giao thức VNPAY. }
-  /payments/vnpay/return:
-    get:
-      tags: [Payments]
-      summary: Redirect trình duyệt từ VNPAY về frontend
-      operationId: vnpayReturn
-      x-implementation-status: implemented
-      responses:
-        '303': { description: Redirect tới trang kết quả frontend; trạng thái cuối lấy từ IPN/API. }
+        '200':
+          description: Received or already handled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  received: { type: boolean }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /courts/{courtId}/pricing:
     get:
       tags: [Payments]
@@ -1304,7 +1308,7 @@ components:
                   available: { type: boolean }
     BookingStatus:
       type: string
-      enum: [CONFIRMED, CANCELLED]
+      enum: [PENDING_PAYMENT, CONFIRMED, CANCELLED, EXPIRED]
     BookingSlot:
       type: object
       required: [timeSlotId, startsAt, endsAt]
@@ -1328,6 +1332,11 @@ components:
           items: { $ref: '#/components/schemas/BookingSlot' }
         createdAt: { type: string, format: date-time }
         cancelledAt: { type: string, format: date-time, nullable: true }
+        holdExpiresAt: { type: string, format: date-time }
+        expiredAt: { type: string, format: date-time }
+        totalAmountVnd: { type: integer, format: int64 }
+        depositAmountVnd: { type: integer, format: int64 }
+        remainingAmountVnd: { type: integer, format: int64 }
     BookingResponse:
       type: object
       required: [data]

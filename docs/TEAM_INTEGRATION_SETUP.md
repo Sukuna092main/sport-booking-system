@@ -19,7 +19,7 @@ Script tạo `.env` từ `.env.example`, sinh `JWT_SECRET`, `EMAIL_ENCRYPTION_KE
 - Kiểm tra API: `http://localhost:8080/api/v1/ping`
 - Swagger: `http://localhost:8080/api/v1/docs`
 
-Compose dùng PostgreSQL local riêng và tự chạy migrations trên DB local. Giá trị `DATABASE_URL` trong `.env` bị Compose ghi đè thành kết nối nội bộ tới container `db`; stack local không tự kết nối Neon. Mặc định VNPAY và gửi email tắt để người chưa có credential vẫn chạy được ứng dụng.
+Compose dùng PostgreSQL local riêng và tự chạy migrations trên DB local. Giá trị `DATABASE_URL` trong `.env` bị Compose ghi đè thành kết nối nội bộ tới container `db`; stack local không tự kết nối Neon. Mặc định thanh toán Stripe và gửi email tắt để người chưa có credential vẫn chạy được ứng dụng.
 
 Đăng ký một tài khoản local. Nếu cần cấu hình dữ liệu demo, nâng tài khoản đó lên ADMIN **chỉ trên DB local**:
 
@@ -65,29 +65,41 @@ Worker cần cùng `EMAIL_ENCRYPTION_KEY` với API vì API mã hóa nội dung 
 
 Kiểm tra luồng bằng chức năng quên mật khẩu trên frontend và xác nhận email tới hộp thư thử nghiệm. Không chụp/gửi log hoặc ảnh có SMTP username, password hay token reset.
 
-## 3. Cấu hình VNPAY sandbox
+## 3. Cấu hình Stripe Checkout
 
-Đầu mối tích hợp phải xin merchant sandbox credentials và callback/domain từ người quản lý tài khoản VNPAY của nhóm. Mẫu repository không chứa `VNPAY_TMN_CODE` hoặc `VNPAY_HASH_SECRET`; không dùng giá trị tự nghĩ ra.
-
-Điền `.env` trên đúng môi trường chạy API:
+Trong file env riêng, dùng cấu hình sau. Lấy khóa test từ Stripe Dashboard và webhook secret từ endpoint hoặc phiên Stripe CLI đang dùng.
 
 ```dotenv
 PAYMENT_ENABLED=true
-PAYMENT_PROVIDER=vnpay
+PAYMENT_PROVIDER=stripe
 PAYMENT_DEPOSIT_BPS=3000
-PAYMENT_HOLD_TTL=10m
-VNPAY_TMN_CODE=<merchant code do chủ tài khoản cấp>
-VNPAY_HASH_SECRET=<hash secret do chủ tài khoản cấp>
-VNPAY_PAYMENT_URL=https://sandbox.vnpayment.vn/paymentv2/vpcpay.html
-VNPAY_RETURN_URL=https://<public-api-domain>/api/v1/payments/vnpay/return
-VNPAY_IPN_URL=https://<public-api-domain>/api/v1/payments/vnpay/ipn
+PAYMENT_HOLD_TTL=35m
+STRIPE_SECRET_KEY=
+STRIPE_PUBLISHABLE_KEY=
+STRIPE_WEBHOOK_SECRET=
 ```
 
-Thay `<public-api-domain>` bằng domain API HTTPS thật. Không giữ dấu ngoặc nhọn và không dùng `localhost`: VNPAY cần gọi được IPN URL từ bên ngoài. Nếu chưa có API HTTPS truy cập công khai thì dùng `PAYMENT_PROVIDER=mock` để demo local; đừng bật VNPAY với callback giả. Với sandbox, dùng sandbox merchant và payment URL sandbox; production cần bộ credential, URL và cấu hình riêng của production.
+API dùng STRIPE_SECRET_KEY để tạo Stripe Checkout Session qua HTTPS. STRIPE_PUBLISHABLE_KEY dành cho ứng dụng khách tích hợp Stripe.js. Luồng Checkout hosted trả checkoutUrl trực tiếp. Số tiền VND gửi nguyên số đồng, vì VND là zero-decimal currency của Stripe.
 
-Sau khi lưu `.env`, tạo lại API và worker như phần email. ADMIN phải cấu hình giá cho từng sân bằng Swagger tại `PUT /api/v1/admin/courts/{courtId}/pricing`. Tạo booking, bắt đầu checkout ở `POST /api/v1/bookings/{bookingId}/payments`, hoàn tất giao dịch sandbox và kiểm tra trạng thái trong trang kết quả/lịch sử đặt sân. Số tiền mỗi lần thanh toán VNPAY phải đạt mức tối thiểu VNPAY mà backend kiểm tra (5.000 VND). Trạng thái cuối được xác nhận qua IPN đã kiểm tra chữ ký; không kết luận giao dịch thành công chỉ từ trang return của trình duyệt.
+Đăng ký POST /api/v1/payments/stripe/webhook tại Stripe Dashboard. Khi phát triển local có thể dùng:
 
-Nếu nhiều thành viên cùng dùng một môi trường API/DB, chỉ người được giao quản lý tích hợp mới giữ merchant secret; các API instance phải dùng cùng cấu hình ổn định. Không để secret xuất hiện trong source, ZIP, log, ảnh chụp màn hình hoặc PR.
+```powershell
+stripe listen --forward-to localhost:8080/api/v1/payments/stripe/webhook
+```
+
+Điền whsec của phiên CLI đó vào STRIPE_WEBHOOK_SECRET rồi khởi động lại backend. Endpoint nhận checkout.session.completed, checkout.session.async_payment_succeeded, checkout.session.async_payment_failed và checkout.session.expired. Session completed chỉ xác nhận nếu payment_status là paid. Webhook dùng raw body, kiểm tra Stripe-Signature và thời gian ký, đối chiếu tiền/currency/reference rồi ghi trạng thái trong transaction.
+
+ADMIN cấu hình giá qua PUT /api/v1/admin/courts/{courtId}/pricing. POST /api/v1/bookings tạo giữ chỗ. POST /api/v1/bookings/{bookingId}/payments trả checkoutUrl để chuyển khách sang Stripe. GET cùng đường dẫn trả bookingStatus, tổng tiền, tiền cọc, tiền còn lại và giao dịch mới nhất. Trang success/cancel cần đọc lại trạng thái API. Webhook mới quyết định trạng thái thanh toán.
+
+Checkout Session yêu cầu ít nhất 30 phút còn lại khi tạo. Backend mặc định giữ chỗ 35 phút và từ chối giữ chỗ quá sát giờ chơi. Nếu tạo checkout sau khi thời gian còn lại dưới 30 phút, API trả provider_unavailable. Worker giải phóng đơn hết hạn. Khoản tiền nhận sau hạn được ghi PAID_REVIEW để người quản lý đối soát. Chính sách hoàn tiền tự động nằm ngoài luồng hiện tại.
+
+Migration 00015 giữ lịch sử giao dịch và áp dụng trigger chỉ cho tạo giao dịch Stripe mới. Rollback gỡ trigger và giữ nguyên dữ liệu; trước khi hạ phiên bản ứng dụng cần kiểm tra khả năng đọc lịch sử Stripe của phiên bản đích.
+
+Tài liệu chính thức:
+- https://docs.stripe.com/api/checkout/sessions/create
+- https://docs.stripe.com/events/manage-webhook-endpoints
+- https://docs.stripe.com/currencies
+
 
 ## 4. Kết nối Neon dùng chung
 
@@ -103,6 +115,6 @@ Nếu nhiều backend instance cùng kết nối một DB, chúng cần cùng `J
 - [ ] Thành viên chạy local stack, `docker compose ps` cho thấy DB, migration, API, worker và frontend hoạt động.
 - [ ] API ping được và Swagger mở được.
 - [ ] Email chỉ bật sau khi SMTP gửi thử thành công; worker dùng đúng encryption key.
-- [ ] VNPAY chỉ bật sau khi có sandbox credential và callback HTTPS công khai; kiểm tra IPN và trạng thái thanh toán.
+- [ ] Kiểm tra Stripe Checkout và webhook bằng bộ khóa test của nhóm.
 - [ ] Neon chỉ dùng đúng nhánh/DB được cấp; migration đã được người phụ trách review.
 - [ ] Báo lại kết quả, lỗi và request ID; không gửi credential, refresh cookie, password hoặc reset token.

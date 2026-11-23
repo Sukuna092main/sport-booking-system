@@ -39,15 +39,13 @@ type Config struct {
 	RefreshCookieSameSite string
 	FrontendPublicURL     string
 
-	PaymentEnabled    bool
-	PaymentProvider   string
-	PaymentDepositBPS int
-	PaymentHoldTTL    time.Duration
-	VNPAYTMNCode      string
-	VNPAYHashSecret   string
-	VNPAYPaymentURL   string
-	VNPAYReturnURL    string
-	VNPAYIPNURL       string
+	PaymentEnabled       bool
+	PaymentProvider      string
+	PaymentDepositBPS    int
+	PaymentHoldTTL       time.Duration
+	StripeSecretKey      string
+	StripePublishableKey string
+	StripeWebhookSecret  string
 
 	EmailEnabled            bool
 	EmailWorkerEnabled      bool
@@ -69,16 +67,14 @@ func Load() (Config, error) {
 		HTTPAddr:    stringValue("HTTP_ADDR", ":8080"),
 		LogLevel:    strings.ToLower(stringValue("LOG_LEVEL", "info")),
 
+		StripeSecretKey:       stringValue("STRIPE_SECRET_KEY", ""),
+		StripePublishableKey:  stringValue("STRIPE_PUBLISHABLE_KEY", ""),
+		StripeWebhookSecret:   stringValue("STRIPE_WEBHOOK_SECRET", ""),
 		DatabaseURL:           stringValue("DATABASE_URL", ""),
 		JWTSecret:             os.Getenv("JWT_SECRET"),
 		FrontendPublicURL:     stringValue("FRONTEND_PUBLIC_URL", "http://localhost:5173"),
 		RefreshCookieSameSite: strings.ToLower(stringValue("REFRESH_COOKIE_SAME_SITE", "lax")),
-		PaymentProvider:       strings.ToLower(stringValue("PAYMENT_PROVIDER", "mock")),
-		VNPAYTMNCode:          stringValue("VNPAY_TMN_CODE", ""),
-		VNPAYHashSecret:       stringValue("VNPAY_HASH_SECRET", ""),
-		VNPAYPaymentURL:       stringValue("VNPAY_PAYMENT_URL", "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html"),
-		VNPAYReturnURL:        stringValue("VNPAY_RETURN_URL", ""),
-		VNPAYIPNURL:           stringValue("VNPAY_IPN_URL", ""),
+		PaymentProvider:       strings.ToLower(stringValue("PAYMENT_PROVIDER", "stripe")),
 		SMTPHost:              stringValue("SMTP_HOST", ""),
 		SMTPUsername:          stringValue("SMTP_USERNAME", ""),
 		SMTPPassword:          os.Getenv("SMTP_PASSWORD"),
@@ -102,7 +98,7 @@ func Load() (Config, error) {
 	if cfg.PasswordResetTTL, err = durationValue("PASSWORD_RESET_TTL", 15*time.Minute); err != nil {
 		return Config{}, err
 	}
-	if cfg.PaymentHoldTTL, err = durationValue("PAYMENT_HOLD_TTL", 10*time.Minute); err != nil {
+	if cfg.PaymentHoldTTL, err = durationValue("PAYMENT_HOLD_TTL", 35*time.Minute); err != nil {
 		return Config{}, err
 	}
 	if cfg.EmailWorkerPollInterval, err = durationValue("EMAIL_WORKER_POLL_INTERVAL", 30*time.Second); err != nil {
@@ -242,27 +238,21 @@ func (c Config) Validate() error {
 	if c.RefreshCookieSameSite == "none" && !c.RefreshCookieSecure {
 		return fmt.Errorf("REFRESH_COOKIE_SECURE must be true when REFRESH_COOKIE_SAME_SITE=none")
 	}
-	if c.PaymentProvider != "mock" && c.PaymentProvider != "vnpay" {
-		return fmt.Errorf("PAYMENT_PROVIDER must be mock or vnpay")
+	if c.PaymentProvider != "stripe" {
+		return fmt.Errorf("PAYMENT_PROVIDER must be stripe")
 	}
-	if c.PaymentEnabled && c.Environment == "production" && c.PaymentProvider == "mock" {
-		return fmt.Errorf("mock payments cannot be enabled in production")
-	}
-	if c.PaymentEnabled && c.PaymentProvider == "vnpay" {
-		if c.VNPAYTMNCode == "" || c.VNPAYHashSecret == "" || c.VNPAYReturnURL == "" || c.VNPAYIPNURL == "" {
-			return fmt.Errorf("VNPAY_TMN_CODE, VNPAY_HASH_SECRET, VNPAY_RETURN_URL and VNPAY_IPN_URL are required when VNPAY is enabled")
+	if c.PaymentEnabled {
+		if c.PaymentHoldTTL < 35*time.Minute {
+			return fmt.Errorf("PAYMENT_HOLD_TTL must be at least 35m for Stripe Checkout")
 		}
-		paymentURL, parseErr := url.Parse(c.VNPAYPaymentURL)
-		if parseErr != nil || paymentURL.Scheme != "https" || paymentURL.Hostname() == "" {
-			return fmt.Errorf("VNPAY_PAYMENT_URL must be an HTTPS URL")
+		if !strings.HasPrefix(c.StripeSecretKey, "sk_") || !strings.HasPrefix(c.StripeWebhookSecret, "whsec_") {
+			return fmt.Errorf("STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET are required")
 		}
-		for name, value := range map[string]string{"VNPAY_RETURN_URL": c.VNPAYReturnURL, "VNPAY_IPN_URL": c.VNPAYIPNURL} {
-			endpoint, endpointErr := url.Parse(value)
-			if endpointErr != nil || endpoint.Scheme != "https" || endpoint.Hostname() == "" || endpoint.User != nil {
-				return fmt.Errorf("%s must be a trusted HTTPS URL", name)
-			}
+		if c.Environment == "production" && strings.HasPrefix(c.StripeSecretKey, "sk_test_") {
+			return fmt.Errorf("production requires a Stripe live key")
 		}
 	}
+
 	if c.EmailWorkerEnabled && !c.EmailEnabled {
 		return fmt.Errorf("EMAIL_WORKER_ENABLED requires EMAIL_ENABLED")
 	}
