@@ -9,6 +9,10 @@ import { CourtAvailabilityPage } from "@/app/pages/CourtAvailabilityPage"
 import { BookingReviewPage } from "@/app/pages/BookingReviewPage"
 import { HomePage } from "@/app/pages/HomePage"
 import { LoginPage } from "@/app/pages/LoginPage"
+import { ForgotPasswordPage } from "@/app/pages/ForgotPasswordPage"
+import { ResetPasswordPage } from "@/app/pages/ResetPasswordPage"
+import { MockPaymentPage } from "@/app/pages/MockPaymentPage"
+import { PaymentResultPage } from "@/app/pages/PaymentResultPage"
 import { ProfilePage } from "@/app/pages/ProfilePage"
 import { RegisterPage } from "@/app/pages/RegisterPage"
 import { ForbiddenPage } from "@/app/pages/ForbiddenPage"
@@ -32,6 +36,10 @@ export function AppRouter() {
             <Route path="/" element={<HomePage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
+            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
+            <Route path="/mock-payment" element={<MockPaymentPage />} />
+            <Route path="/payment-result" element={<PaymentResultPage />} />
             <Route path="/forbidden" element={<ForbiddenPage />} />
 
             {/* Courts — public browse/search/detail/availability */}

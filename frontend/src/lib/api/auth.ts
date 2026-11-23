@@ -1,19 +1,21 @@
 import { apiClient } from "@/lib/api/client"
 import type {
+  AuthMessageResponse,
+  ChangePasswordRequest,
+  ChangePasswordResponse,
+  ForgotPasswordRequest,
+  ForgotPasswordResponse,
   LoginRequest,
   LoginResponse,
   RegisterRequest,
   RegisterResponse,
+  ResetPasswordRequest,
+  ResetPasswordResponse,
   User,
 } from "@/types/auth.types"
 
 /**
- * Auth API service — theo contract OpenAPI 0.3.0.
- *
- * POST  /auth/register → 201 { data: User }      (không tự đăng nhập)
- * POST  /auth/login    → 200 { data: LoginData }
- * GET   /users/me      → 200 { data: User }       (cần Bearer token)
- * PATCH /users/me      → 200 { data: User }       (cần Bearer token)
+ * Auth API service — theo contract OpenAPI & Backend Auth Router
  */
 export const authApi = {
   /**
@@ -41,9 +43,70 @@ export const authApi = {
   },
 
   /**
+   * POST /auth/refresh
+   * 200 → { data: { accessToken, tokenType, expiresAt, user } }
+   * 401 → unauthorized
+   */
+  refresh(): Promise<LoginResponse> {
+    return apiClient
+      .post<LoginResponse>("/auth/refresh", {})
+      .then((r) => r.data)
+  },
+
+  /**
+   * POST /auth/logout
+   * 200 → { data: { message: "Đã đăng xuất." } }
+   */
+  logout(): Promise<AuthMessageResponse> {
+    return apiClient
+      .post<AuthMessageResponse>("/auth/logout", {})
+      .then((r) => r.data)
+  },
+
+  /**
+   * POST /auth/logout-all
+   * 200 → { data: { message: "Đã đăng xuất khỏi mọi thiết bị." } }
+   */
+  logoutAll(): Promise<AuthMessageResponse> {
+    return apiClient
+      .post<AuthMessageResponse>("/auth/logout-all", {})
+      .then((r) => r.data)
+  },
+
+  /**
+   * POST /auth/forgot-password
+   * 202 → { data: { message: "..." } }
+   */
+  forgotPassword(body: ForgotPasswordRequest): Promise<ForgotPasswordResponse> {
+    return apiClient
+      .post<ForgotPasswordResponse>("/auth/forgot-password", body)
+      .then((r) => r.data)
+  },
+
+  /**
+   * POST /auth/reset-password
+   * 200 → { data: { message: "..." } }
+   */
+  resetPassword(body: ResetPasswordRequest): Promise<ResetPasswordResponse> {
+    return apiClient
+      .post<ResetPasswordResponse>("/auth/reset-password", body)
+      .then((r) => r.data)
+  },
+
+  /**
+   * POST /auth/change-password
+   * 200 → { data: { message: "..." } }
+   */
+  changePassword(body: ChangePasswordRequest): Promise<ChangePasswordResponse> {
+    return apiClient
+      .post<ChangePasswordResponse>("/auth/change-password", body)
+      .then((r) => r.data)
+  },
+
+  /**
    * GET /users/me
    * 200 → { data: User }
-   * 401 → unauthorized  (token missing/invalid/expired)
+   * 401 → unauthorized
    */
   getMe(): Promise<{ data: User }> {
     return apiClient

@@ -14,12 +14,14 @@ import {
   Copy,
   MapPin,
   Ban,
+  CreditCard,
 } from "lucide-react"
 import { useAuth } from "@/features/auth/useAuth"
 import { useMyBookings, useCancelMyBooking } from "@/features/bookings/useBookings"
 import { useCourts, useSportTypes } from "@/features/courts/useCourts"
 import type { BookingItem, BookingStatus } from "@/features/bookings/types"
 import { fmtTime } from "@/features/bookings/consecutiveSlots"
+import { paymentsApi } from "@/lib/api/payments"
 import {
   checkBookingCancellationEligibility,
   formatBookingDateDisplay,
@@ -126,7 +128,7 @@ export function BookingsPage() {
       )}
 
       {/* Filter Tabs */}
-      <div className="mt-6 flex items-center gap-2 border-b border-gray-200">
+      <div className="mt-6 flex flex-wrap items-center gap-2 border-b border-gray-200">
         <button
           type="button"
           onClick={() => setStatusFilter("ALL")}
@@ -151,6 +153,17 @@ export function BookingsPage() {
         </button>
         <button
           type="button"
+          onClick={() => setStatusFilter("PENDING_PAYMENT")}
+          className={`pb-3 text-xs font-bold transition-colors border-b-2 -mb-px ${
+            statusFilter === "PENDING_PAYMENT"
+              ? "border-amber-600 text-amber-800"
+              : "border-transparent text-gray-400 hover:text-gray-700"
+          }`}
+        >
+          Chờ thanh toán (PENDING)
+        </button>
+        <button
+          type="button"
           onClick={() => setStatusFilter("CANCELLED")}
           className={`pb-3 text-xs font-bold transition-colors border-b-2 -mb-px ${
             statusFilter === "CANCELLED"
@@ -159,6 +172,17 @@ export function BookingsPage() {
           }`}
         >
           Đã hủy (CANCELLED)
+        </button>
+        <button
+          type="button"
+          onClick={() => setStatusFilter("EXPIRED")}
+          className={`pb-3 text-xs font-bold transition-colors border-b-2 -mb-px ${
+            statusFilter === "EXPIRED"
+              ? "border-gray-600 text-gray-800"
+              : "border-transparent text-gray-400 hover:text-gray-700"
+          }`}
+        >
+          Hết hạn (EXPIRED)
         </button>
       </div>
 
@@ -206,6 +230,9 @@ export function BookingsPage() {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {bookings.map((b) => {
               const isConfirmed = b.status === "CONFIRMED"
+              const isPendingPayment = b.status === "PENDING_PAYMENT"
+              const isExpired = b.status === "EXPIRED"
+              const isCancelled = b.status === "CANCELLED"
               const slotCount = b.slots?.length ?? 0
               const sorted = [...(b.slots ?? [])].sort(
                 (x, y) => new Date(x.startsAt).getTime() - new Date(y.startsAt).getTime()
@@ -259,20 +286,18 @@ export function BookingsPage() {
                         className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
                           isConfirmed
                             ? "bg-emerald-100 text-emerald-800"
-                            : "bg-gray-100 text-gray-600"
+                            : isPendingPayment
+                            ? "bg-amber-100 text-amber-800"
+                            : isExpired
+                            ? "bg-gray-100 text-gray-500"
+                            : "bg-rose-100 text-rose-700"
                         }`}
                       >
-                        {isConfirmed ? (
-                          <>
-                            <CheckCircle className="h-3 w-3 text-emerald-600" />
-                            CONFIRMED
-                          </>
-                        ) : (
-                          <>
-                            <XCircle className="h-3 w-3 text-gray-400" />
-                            CANCELLED
-                          </>
-                        )}
+                        {isConfirmed && <CheckCircle className="h-3 w-3 text-emerald-600" />}
+                        {isPendingPayment && <Clock className="h-3 w-3 text-amber-600" />}
+                        {isExpired && <XCircle className="h-3 w-3 text-gray-400" />}
+                        {isCancelled && <Ban className="h-3 w-3 text-rose-600" />}
+                        {b.status}
                       </span>
                     </div>
 
@@ -318,6 +343,36 @@ export function BookingsPage() {
                     </span>
 
                     <div className="flex items-center gap-2">
+                      {isPendingPayment && (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              const payRes = await paymentsApi.startPayment(b.id)
+                              if (payRes.data.checkoutUrl) {
+                                const url = payRes.data.checkoutUrl
+                                if (url.startsWith("http://") || url.startsWith("https://")) {
+                                  if (url.includes(window.location.host)) {
+                                    const parsedUrl = new URL(url)
+                                    navigate(parsedUrl.pathname + parsedUrl.search)
+                                  } else {
+                                    window.location.href = url
+                                  }
+                                } else {
+                                  navigate(url)
+                                }
+                              }
+                            } catch {
+                              navigate(`/bookings/${b.id}`)
+                            }
+                          }}
+                          className="font-bold text-amber-700 hover:text-amber-800 hover:underline inline-flex items-center gap-1 text-[11px]"
+                        >
+                          <CreditCard className="h-3 w-3" />
+                          Thanh toán
+                        </button>
+                      )}
+
                       {cancelEligibility.canCancel && (
                         <button
                           type="button"

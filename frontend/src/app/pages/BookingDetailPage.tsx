@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Link, useNavigate, useParams } from "react-router-dom"
 import {
   ArrowLeft,
@@ -13,6 +13,8 @@ import {
   MapPin,
   Tag,
   Info,
+  CreditCard,
+  MailCheck,
 } from "lucide-react"
 import { useAuth } from "@/features/auth/useAuth"
 import { useMyBooking, useCancelMyBooking } from "@/features/bookings/useBookings"
@@ -23,6 +25,9 @@ import {
   formatBookingDateDisplay,
   parseCancelError,
 } from "@/features/bookings/cancellation"
+import { paymentsApi } from "@/lib/api/payments"
+import { AxiosError } from "axios"
+import type { ApiErrorResponse } from "@/types/auth.types"
 
 export function BookingDetailPage() {
   const { bookingId } = useParams<{ bookingId: string }>()
@@ -36,10 +41,26 @@ export function BookingDetailPage() {
   const [successBanner, setSuccessBanner] = useState<string | null>(null)
   const [now] = useState(() => Date.now())
 
+  // Countdown timer for PENDING_PAYMENT hold TTL
+  const [timeLeftSec, setTimeLeftSec] = useState<number>(0)
+  const [isStartingPayment, setIsStartingPayment] = useState(false)
+  const [paymentError, setPaymentError] = useState<string | null>(null)
+
   const { data: booking, isLoading, error } = useMyBooking(bookingId ?? "")
   const { data: court } = useCourtById(booking?.courtId ?? "")
   const { data: sportTypes } = useSportTypes()
   const cancelMutation = useCancelMyBooking()
+
+  useEffect(() => {
+    if (!booking?.holdExpiresAt || booking.status !== "PENDING_PAYMENT") return
+    const updateTime = () => {
+      const diff = Math.floor((new Date(booking.holdExpiresAt!).getTime() - Date.now()) / 1000)
+      setTimeLeftSec(Math.max(0, diff))
+    }
+    updateTime()
+    const timer = setInterval(updateTime, 1000)
+    return () => clearInterval(timer)
+  }, [booking?.holdExpiresAt, booking?.status])
 
   const sportTypeMap = Object.fromEntries(
     (sportTypes ?? []).map((st) => [st.id, st.name])
@@ -99,6 +120,43 @@ export function BookingDetailPage() {
   )
 
   const isConfirmed = booking.status === "CONFIRMED"
+  const isPendingPayment = booking.status === "PENDING_PAYMENT"
+  const isExpired = booking.status === "EXPIRED"
+  const isCancelled = booking.status === "CANCELLED"
+
+  const minutes = Math.floor(timeLeftSec / 60)
+  const seconds = timeLeftSec % 60
+  const timerDisplay = `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`
+
+  async function handleStartPayment() {
+    if (!booking) return
+    setIsStartingPayment(true)
+    setPaymentError(null)
+    try {
+      const res = await paymentsApi.startPayment(booking.id)
+      if (res.data.checkoutUrl) {
+        const url = res.data.checkoutUrl
+        if (url.startsWith("http://") || url.startsWith("https://")) {
+          if (url.includes(window.location.host)) {
+            const parsed = new URL(url)
+            navigate(parsed.pathname + parsed.search)
+          } else {
+            window.location.href = url
+          }
+        } else {
+          navigate(url)
+        }
+      }
+    } catch (err: unknown) {
+      if (err instanceof AxiosError) {
+        const data = err.response?.data as ApiErrorResponse | undefined
+        setPaymentError(data?.error?.message ?? "Không thể bắt đầu thanh toán.")
+      } else {
+        setPaymentError("Lỗi kết nối máy chủ.")
+      }
+      setIsStartingPayment(false)
+    }
+  }
 
   // Check business rules for cancellation
   const cancelEligibility = checkBookingCancellationEligibility(
@@ -202,23 +260,20 @@ export function BookingDetailPage() {
                 CHI TIẾT BOOKING
               </span>
               <span
-                className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-black uppercase tracking-wider ${
-                  isConfirmed
-                    ? "bg-emerald-100 text-emerald-800"
-                    : "bg-gray-200 text-gray-700"
-                }`}
+                className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-black uppercase tracking-wider ${isConfirmed
+                  ? "bg-emerald-100 text-emerald-800"
+                  : isPendingPayment
+                    ? "bg-amber-100 text-amber-800"
+                    : isExpired
+                      ? "bg-gray-100 text-gray-500"
+                      : "bg-rose-100 text-rose-700"
+                  }`}
               >
-                {isConfirmed ? (
-                  <>
-                    <CheckCircle className="h-3.5 w-3.5 text-emerald-600" />
-                    CONFIRMED
-                  </>
-                ) : (
-                  <>
-                    <XCircle className="h-3.5 w-3.5 text-gray-500" />
-                    CANCELLED
-                  </>
-                )}
+                {isConfirmed && <CheckCircle className="h-3.5 w-3.5 text-emerald-600" />}
+                {isPendingPayment && <Clock className="h-3.5 w-3.5 text-amber-600" />}
+                {isExpired && <XCircle className="h-3.5 w-3.5 text-gray-400" />}
+                {isCancelled && <XCircle className="h-3.5 w-3.5 text-rose-600" />}
+                {booking.status}
               </span>
             </div>
 
@@ -263,6 +318,68 @@ export function BookingDetailPage() {
           </div>
         </div>
 
+        {/* Pending Payment Hold Banner */}
+        {isPendingPayment && (
+          <div className="bg-amber-500/10 border-b border-amber-200/80 p-5 flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500 text-white font-black">
+                <Clock className="h-5 w-5 animate-pulse" />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-amber-900">
+                  Đang giữ chỗ chờ thanh toán đặt cọc
+                </p>
+                <p className="text-[11px] text-amber-700">
+                  Thời gian giữ chỗ còn lại:{" "}
+                  <span className="font-mono font-black text-sm text-amber-900">
+                    {timerDisplay}
+                  </span>{" "}
+                  (sau thời gian này slot sẽ tự động bị hủy).
+                </p>
+                {paymentError && (
+                  <p className="mt-1 text-xs text-red-600 font-semibold">{paymentError}</p>
+                )}
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleStartPayment}
+              disabled={isStartingPayment || timeLeftSec <= 0}
+              className="flex items-center gap-2 rounded-xl bg-[#16A34A] px-5 py-2.5 text-xs font-black text-white hover:bg-[#15803D] active:scale-[0.99] disabled:opacity-50 transition-all shadow-xs"
+            >
+              {isStartingPayment ? (
+                <><Loader2 className="h-4 w-4 animate-spin" /> Đang chuyển hướng…</>
+              ) : (
+                <><CreditCard className="h-4 w-4" /> Thanh toán đặt cọc ngay</>
+              )}
+            </button>
+          </div>
+        )}
+
+        {/* Expired Notice */}
+        {isExpired && (
+          <div className="bg-gray-50 border-b border-gray-200 p-4 text-xs text-gray-600 flex items-center gap-2">
+            <Info className="h-4 w-4 text-gray-400 shrink-0" />
+            <span>
+              Đơn đặt này đã hết thời gian giữ chỗ (10 phút) mà chưa hoàn tất thanh toán. Khung giờ này đã được giải phóng trên hệ thống.
+            </span>
+          </div>
+        )}
+
+        {/* Confirmed Email Notice */}
+        {isConfirmed && (
+          <div className="bg-emerald-50/70 border-b border-emerald-100 p-4 text-xs text-emerald-900 flex items-start gap-2.5">
+            <MailCheck className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-bold">Email xác nhận đặt sân đã gửi</p>
+              <p className="text-[11px] text-emerald-800 leading-relaxed">
+                Chi tiết đơn đặt và biên nhận cọc đã được gửi tới email của bạn. Hệ thống sẽ tự động gửi email nhắc lịch trước giờ thi đấu 24 tiếng.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Content Body */}
         <div className="p-6 space-y-6">
           {/* Grid Overview */}
@@ -290,13 +407,25 @@ export function BookingDetailPage() {
               </p>
             </div>
 
-            <div className="rounded-xl border border-gray-100 bg-gray-50/50 p-4">
-              <p className="text-[10px] font-bold uppercase text-gray-400">Giá tham chiếu (MVP)</p>
-              <p className="mt-1 text-sm font-bold text-gray-900 flex items-center gap-1.5">
-                <Tag className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                <span>{priceInfo.totalText}</span>
-              </p>
-            </div>
+            {booking.depositAmountVnd ? (
+              <div className="rounded-xl border border-emerald-100 bg-emerald-50/50 p-4">
+                <p className="text-[10px] font-bold uppercase text-emerald-800">Tiền đặt cọc (30%)</p>
+                <p className="mt-1 text-sm font-black text-emerald-900">
+                  {booking.depositAmountVnd.toLocaleString("vi-VN")} VND
+                </p>
+                <p className="text-[10px] text-gray-500 mt-0.5">
+                  Còn lại tại sân: {(booking.remainingAmountVnd || 0).toLocaleString("vi-VN")} VND
+                </p>
+              </div>
+            ) : (
+              <div className="rounded-xl border border-gray-100 bg-gray-50/50 p-4">
+                <p className="text-[10px] font-bold uppercase text-gray-400">Giá tham chiếu (MVP)</p>
+                <p className="mt-1 text-sm font-bold text-gray-900 flex items-center gap-1.5">
+                  <Tag className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                  <span>{priceInfo.totalText}</span>
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Slots list */}

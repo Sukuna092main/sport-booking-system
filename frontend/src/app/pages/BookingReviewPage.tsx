@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import {
   ArrowLeft,
@@ -13,6 +13,8 @@ import {
   MapPin,
   AlertCircle,
   Calendar,
+  CreditCard,
+  MailCheck,
 } from "lucide-react"
 import type {
   BookingItem,
@@ -25,6 +27,7 @@ import {
 import { useCourtById } from "@/features/courts/useCourts"
 import { bookingsApi, generateIdempotencyKey } from "@/lib/api/bookings"
 import { saveMockBooking } from "@/features/bookings/useBookings"
+import { paymentsApi } from "@/lib/api/payments"
 import { AxiosError } from "axios"
 import type { ApiErrorResponse } from "@/types/auth.types"
 
@@ -46,6 +49,22 @@ export function BookingReviewPage() {
 
   // Fresh court data query to ensure latest constraints and reference price
   const { data: court } = useCourtById(reviewData?.courtId ?? "")
+
+  // Real pricing per slot from backend
+  const [courtPricing, setCourtPricing] = useState<{ pricePerSlotVnd: number } | null>(null)
+
+  useEffect(() => {
+    if (reviewData?.courtId) {
+      paymentsApi
+        .getCourtPricing(reviewData.courtId)
+        .then((res) => {
+          if (res.data?.pricePerSlotVnd) {
+            setCourtPricing(res.data)
+          }
+        })
+        .catch(() => setCourtPricing(null))
+    }
+  }, [reviewData?.courtId])
 
   // Idempotency Key state (opaque, 1-128 chars, unique per attempt / preserved on retry)
   const [idempotencyKey] = useState<string>(() => generateIdempotencyKey())
@@ -105,6 +124,12 @@ export function BookingReviewPage() {
 
   const slotCount = reviewData.selectedSlots.length
 
+  // Real pricing calculations
+  const pricePerSlot = courtPricing?.pricePerSlotVnd || 0
+  const totalCalculatedVnd = pricePerSlot > 0 ? pricePerSlot * slotCount : 0
+  const depositCalculatedVnd = totalCalculatedVnd > 0 ? Math.floor((totalCalculatedVnd * 3000) / 10000) : 0
+  const remainingCalculatedVnd = totalCalculatedVnd - depositCalculatedVnd
+
   // Hiển thị giá tham chiếu và tổng số slot
   const priceInfo = formatReferencePrice(priceAmount, priceCurrency, slotCount)
 
@@ -133,6 +158,30 @@ export function BookingReviewPage() {
       saveMockBooking(createdBooking)
       sessionStorage.removeItem("pending_booking_review")
       sessionStorage.removeItem("pending_booking_payload")
+
+      // If booking requires payment, initiate checkout session
+      if (createdBooking.status === "PENDING_PAYMENT") {
+        sessionStorage.setItem("pending_booking_id", createdBooking.id)
+        try {
+          const payRes = await paymentsApi.startPayment(createdBooking.id)
+          if (payRes.data.checkoutUrl) {
+            const url = payRes.data.checkoutUrl
+            if (url.startsWith("http://") || url.startsWith("https://")) {
+              if (url.includes(window.location.host)) {
+                const parsedUrl = new URL(url)
+                navigate(parsedUrl.pathname + parsedUrl.search)
+              } else {
+                window.location.href = url
+              }
+            } else {
+              navigate(url)
+            }
+            return
+          }
+        } catch {
+          // If starting checkout fails, display result state with button
+        }
+      }
 
       setIsSubmitting(false)
       setSubmitResult({
@@ -327,30 +376,71 @@ export function BookingReviewPage() {
               </div>
             </div>
 
-            {/* Reference Price */}
+            {/* Real Payment Pricing or Reference Price */}
             <div className="mt-6 rounded-xl border border-gray-200 bg-gray-50/80 p-4">
-              <div className="flex items-center justify-between">
+              {courtPricing && courtPricing.pricePerSlotVnd > 0 ? (
                 <div>
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
-                    GIÁ THAM CHIẾU (REFERENCE PRICE)
-                  </p>
-                  <p className="text-xs text-gray-600 mt-0.5">
-                    Đơn giá: <span className="font-semibold text-gray-900">{priceInfo.unitText}</span> × {slotCount} slot
+                  <div className="flex items-center justify-between pb-3 border-b border-gray-200/70">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-gray-900">
+                      <CreditCard className="h-4 w-4 text-emerald-600" />
+                      <span>Chi phí đặt sân & Đặt cọc</span>
+                    </div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 bg-emerald-100 px-2.5 py-0.5 rounded-full border border-emerald-300">
+                      CỌC 30% ONLINE
+                    </span>
+                  </div>
+
+                  <div className="mt-3 space-y-2 text-xs">
+                    <div className="flex justify-between text-gray-600">
+                      <span>Đơn giá mỗi slot:</span>
+                      <span className="font-semibold text-gray-900">
+                        {pricePerSlot.toLocaleString("vi-VN")} VND / slot
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-gray-600">
+                      <span>Tổng tiền ({slotCount} slot):</span>
+                      <span className="font-bold text-gray-900">
+                        {totalCalculatedVnd.toLocaleString("vi-VN")} VND
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-emerald-900 font-bold border-t border-gray-200/60 pt-2">
+                      <span>Số tiền cọc trực tuyến (30%):</span>
+                      <span className="text-sm font-black text-emerald-700">
+                        {depositCalculatedVnd.toLocaleString("vi-VN")} VND
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-gray-500 text-[11px]">
+                      <span>Số tiền còn lại thanh toán tại sân:</span>
+                      <span>{remainingCalculatedVnd.toLocaleString("vi-VN")} VND</span>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                        GIÁ THAM CHIẾU (REFERENCE PRICE)
+                      </p>
+                      <p className="text-xs text-gray-600 mt-0.5">
+                        Đơn giá: <span className="font-semibold text-gray-900">{priceInfo.unitText}</span> × {slotCount} slot
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-xs text-gray-400 font-medium">Tổng giá tham chiếu:</span>
+                      <p className="text-lg font-black text-gray-900">
+                        {priceInfo.totalText}
+                      </p>
+                    </div>
+                  </div>
+                  <p className="mt-2 text-[11px] text-gray-400 leading-relaxed border-t border-gray-200/60 pt-2 flex items-center gap-1.5">
+                    <Tag className="h-3 w-3 text-emerald-600 shrink-0" />
+                    <span>
+                      Giá tham chiếu mang tính đối chiếu. Bạn có thể thanh toán khi đến sân.
+                    </span>
                   </p>
                 </div>
-                <div className="text-right">
-                  <span className="text-xs text-gray-400 font-medium">Tổng giá tham chiếu:</span>
-                  <p className="text-lg font-black text-gray-900">
-                    {priceInfo.totalText}
-                  </p>
-                </div>
-              </div>
-              <p className="mt-2 text-[11px] text-gray-400 leading-relaxed border-t border-gray-200/60 pt-2 flex items-center gap-1.5">
-                <Tag className="h-3 w-3 text-emerald-600 shrink-0" />
-                <span>
-                  Giá tham chiếu mang tính đối chiếu. MVP hiện tại không thu phí hoặc yêu cầu thanh toán trực tuyến.
-                </span>
-              </p>
+              )}
             </div>
 
             {/* Validation Banner */}
@@ -454,6 +544,14 @@ export function BookingReviewPage() {
                     <span className="text-gray-500">Trạng thái:</span>
                     <span className="font-bold text-emerald-700">CONFIRMED</span>
                   </div>
+                </div>
+
+                {/* Email notification notice */}
+                <div className="mt-3 rounded-xl border border-emerald-200 bg-white/80 p-2.5 text-[11px] text-emerald-900 flex items-start gap-2">
+                  <MailCheck className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <span>
+                    Email xác nhận đã được gửi đến hộp thư của bạn. Hệ thống sẽ tiếp tục gửi email nhắc lịch trước giờ thi đấu 24 tiếng.
+                  </span>
                 </div>
 
                 <div className="mt-4 space-y-2">
