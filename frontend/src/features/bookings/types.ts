@@ -10,7 +10,7 @@ export interface CreateBookingPayload {
 
 export type SlotStatus = "available" | "unavailable" | "past" | "booked" | "blackout"
 
-export type BookingStatus = "CONFIRMED" | "CANCELLED"
+export type BookingStatus = "CONFIRMED" | "CANCELLED" | "PENDING_PAYMENT" | "EXPIRED"
 
 export interface BookingSlotItem {
   timeSlotId: string
@@ -28,6 +28,11 @@ export interface BookingItem {
   slots: BookingSlotItem[]
   createdAt: string
   cancelledAt?: string | null
+  holdExpiresAt?: string | null
+  expiredAt?: string | null
+  totalAmountVnd?: number | null
+  depositAmountVnd?: number | null
+  remainingAmountVnd?: number | null
 }
 
 export interface BookingResponse {

@@ -7,7 +7,7 @@ import {
 } from "react"
 import { tokenStorage } from "@/lib/auth/token"
 import { authApi } from "@/lib/api/auth"
-import type { User } from "@/types/auth.types"
+import type { LoginData, User } from "@/types/auth.types"
 import { AuthContext } from "./AuthContextDef"
 
 /* ------------------------------------------------------------------ */
@@ -39,14 +39,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   /**
    * Re-hydrate session from localStorage on mount.
-   * Doc §5.1: "Bearer token trong memory phía client; logout clear token;
-   * không refresh/revocation nâng cao trong MVP."
-   * Both accessToken and isLoading are seeded by the lazy initialisers
-   * above. This effect only performs the async network verification.
    */
   useEffect(() => {
     if (!accessToken) {
-      // No valid stored token — already cleaned up in lazy init, nothing to do
       tokenStorage.clear()
       return
     }
@@ -54,7 +49,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .getMe()
       .then(({ data }) => setUser(data))
       .catch(() => {
-        // Token invalid/expired — clear and continue as guest
         tokenStorage.clear()
         setAccessToken(null)
       })
@@ -63,19 +57,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []) // intentionally run once on mount only
 
   /**
-   * Listen for the auth:unauthorized event dispatched by the axios
-   * interceptor when any API call returns 401.
-   * Doc §7.1: "401 từ protected API đưa ứng dụng về trạng thái chưa
-   * xác thực theo policy đã review."
+   * Listen for auth events dispatched by apiClient interceptor:
+   * - auth:unauthorized: reset user & token state
+   * - auth:token-refreshed: update token & user state with new session
    */
   useEffect(() => {
     function handleUnauthorized() {
       setUser(null)
       setAccessToken(null)
     }
+
+    function handleTokenRefreshed(e: Event) {
+      const customEvent = e as CustomEvent<LoginData>
+      if (customEvent.detail) {
+        setAccessToken(customEvent.detail.accessToken)
+        if (customEvent.detail.user) {
+          setUser(customEvent.detail.user)
+        }
+      }
+    }
+
     window.addEventListener("auth:unauthorized", handleUnauthorized)
+    window.addEventListener("auth:token-refreshed", handleTokenRefreshed)
     return () => {
       window.removeEventListener("auth:unauthorized", handleUnauthorized)
+      window.removeEventListener("auth:token-refreshed", handleTokenRefreshed)
     }
   }, [])
 
@@ -86,13 +92,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   /**
-   * Logout: doc §5.1 — no server-side revocation in MVP; only clear
-   * client-side token and state.
+   * Logout: call backend /auth/logout to revoke refresh session & cookie,
+   * then clear client-side token and state.
    */
   const logout = useCallback(() => {
+    authApi.logout().catch(() => {})
     tokenStorage.clear()
     setAccessToken(null)
     setUser(null)
+  }, [])
+
+  /**
+   * Logout all devices: revoke all active sessions on backend,
+   * then clear client-side token and state.
+   */
+  const logoutAll = useCallback(async () => {
+    try {
+      await authApi.logoutAll()
+    } finally {
+      tokenStorage.clear()
+      setAccessToken(null)
+      setUser(null)
+    }
   }, [])
 
   const value = useMemo(
@@ -103,8 +124,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isLoading,
       login,
       logout,
+      logoutAll,
     }),
-    [user, accessToken, isLoading, login, logout],
+    [user, accessToken, isLoading, login, logout, logoutAll],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

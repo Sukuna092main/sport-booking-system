@@ -15,6 +15,9 @@ import {
   ChevronRight,
   Tag,
   ShieldAlert,
+  CreditCard,
+  Loader2,
+  X,
 } from "lucide-react"
 import type { Court } from "@/types/court.types"
 import {
@@ -26,6 +29,9 @@ import {
 import { CourtFormModal } from "@/features/admin/courts/CourtFormModal"
 import { ConfirmActionModal } from "@/features/admin/courts/ConfirmActionModal"
 import { parseAdminApiError } from "@/features/admin/courts/adminErrorUtils"
+import { paymentsApi } from "@/lib/api/payments"
+import { AxiosError } from "axios"
+import type { ApiErrorResponse } from "@/types/auth.types"
 
 /* ── Sport type badge colors ─────────────────────────────────────── */
 const SPORT_COLOURS: Record<string, { bg: string; text: string; border: string }> = {
@@ -74,6 +80,62 @@ export function AdminCourtsPage() {
   } | null>(null)
   const [confirmError, setConfirmError] = useState<string | null>(null)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
+
+  // Pricing Modal States
+  const [pricingCourt, setPricingCourt] = useState<Court | null>(null)
+  const [pricingAmount, setPricingAmount] = useState<string>("")
+  const [pricingActive, setPricingActive] = useState<boolean>(true)
+  const [isSavingPricing, setIsSavingPricing] = useState(false)
+  const [pricingError, setPricingError] = useState<string | null>(null)
+  const [pricingSuccess, setPricingSuccess] = useState<string | null>(null)
+
+  function openPricingModal(court: Court) {
+    setPricingCourt(court)
+    setPricingAmount(court.referencePriceAmount ? String(court.referencePriceAmount) : "100000")
+    setPricingActive(true)
+    setPricingError(null)
+    setPricingSuccess(null)
+    paymentsApi
+      .getCourtPricing(court.id)
+      .then((res) => {
+        if (res.data?.pricePerSlotVnd) {
+          setPricingAmount(String(res.data.pricePerSlotVnd))
+          setPricingActive(res.data.isActive)
+        }
+      })
+      .catch(() => {})
+  }
+
+  async function handleSavePricing() {
+    if (!pricingCourt) return
+    const val = parseInt(pricingAmount, 10)
+    if (isNaN(val) || val < 1) {
+      setPricingError("Đơn giá mỗi slot phải là số nguyên lớn hơn 0.")
+      return
+    }
+    setIsSavingPricing(true)
+    setPricingError(null)
+    try {
+      await paymentsApi.setCourtPricing(pricingCourt.id, {
+        pricePerSlotVnd: val,
+        isActive: pricingActive,
+      })
+      setPricingSuccess("Đã cập nhật đơn giá thanh toán thành công!")
+      setTimeout(() => {
+        setPricingCourt(null)
+        refetch()
+      }, 1000)
+    } catch (err: unknown) {
+      if (err instanceof AxiosError) {
+        const data = err.response?.data as ApiErrorResponse | undefined
+        setPricingError(data?.error?.message ?? "Không thể cập nhật đơn giá.")
+      } else {
+        setPricingError("Lỗi kết nối máy chủ.")
+      }
+    } finally {
+      setIsSavingPricing(false)
+    }
+  }
 
   function showToast(msg: string) {
     setToastMessage(msg)
@@ -455,6 +517,16 @@ export function AdminCourtsPage() {
 
                           <button
                             type="button"
+                            onClick={() => openPricingModal(court)}
+                            className="flex items-center gap-1 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] font-bold text-amber-800 hover:bg-amber-100 transition-colors shadow-2xs"
+                            title="Thiết lập đơn giá thanh toán cho sân này"
+                          >
+                            <CreditCard className="h-3 w-3 text-amber-600" />
+                            <span>Giá cọc</span>
+                          </button>
+
+                          <button
+                            type="button"
                             onClick={() => setEditingCourt(court)}
                             className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-bold text-gray-700 shadow-2xs hover:bg-gray-50 hover:text-gray-900 transition-colors"
                           >
@@ -579,6 +651,109 @@ export function AdminCourtsPage() {
           setConfirmError(null)
         }}
       />
+
+      {/* Pricing Configuration Modal */}
+      {pricingCourt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl animate-in fade-in">
+            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <CreditCard className="h-5 w-5 text-emerald-600" />
+                <h3 className="text-base font-bold text-gray-900">Thiết lập đơn giá thanh toán</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPricingCourt(null)}
+                disabled={isSavingPricing}
+                className="rounded-lg p-1 text-gray-400 hover:bg-gray-100"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="mt-3 text-xs text-gray-500">
+              Sân: <span className="font-bold text-gray-900">{pricingCourt.name}</span> ({pricingCourt.code})
+            </div>
+
+            {pricingSuccess ? (
+              <div role="status" className="my-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-xs text-emerald-800 flex items-center gap-2">
+                <CheckCircle className="h-4 w-4 text-emerald-600 shrink-0" />
+                <span>{pricingSuccess}</span>
+              </div>
+            ) : (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  handleSavePricing()
+                }}
+                className="mt-4 space-y-4"
+              >
+                {pricingError && (
+                  <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-600 flex items-start gap-2">
+                    <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                    <span>{pricingError}</span>
+                  </div>
+                )}
+
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                    Đơn giá mỗi TimeSlot (VND) <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="1000"
+                    step="1000"
+                    value={pricingAmount}
+                    onChange={(e) => setPricingAmount(e.target.value)}
+                    disabled={isSavingPricing}
+                    placeholder="Ví dụ: 120000"
+                    className="block w-full rounded-xl border border-gray-200 bg-gray-50 py-2.5 px-3.5 text-sm font-semibold text-gray-900 focus:border-[#16A34A] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#16A34A]/20"
+                  />
+                  <p className="mt-1 text-[11px] text-gray-400">
+                    Tiền cọc trực tuyến sẽ tự động tính bằng 30% giá trị này khi người dùng đặt sân.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 pt-1">
+                  <input
+                    type="checkbox"
+                    id="pricing-is-active"
+                    checked={pricingActive}
+                    onChange={(e) => setPricingActive(e.target.checked)}
+                    disabled={isSavingPricing}
+                    className="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                  />
+                  <label htmlFor="pricing-is-active" className="text-xs font-medium text-gray-700">
+                    Kích hoạt áp dụng mức giá này
+                  </label>
+                </div>
+
+                <div className="flex justify-end gap-2.5 pt-3 border-t border-gray-100">
+                  <button
+                    type="button"
+                    onClick={() => setPricingCourt(null)}
+                    disabled={isSavingPricing}
+                    className="rounded-xl border border-gray-200 px-4 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50"
+                  >
+                    Hủy
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSavingPricing}
+                    className="flex items-center gap-1.5 rounded-xl bg-[#B4FF00] px-5 py-2 text-xs font-bold text-gray-900 hover:bg-[#AAEF00] disabled:opacity-60"
+                  >
+                    {isSavingPricing ? (
+                      <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Đang lưu…</>
+                    ) : (
+                      "Lưu đơn giá"
+                    )}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
