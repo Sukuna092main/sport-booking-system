@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { useSearchParams, Link } from "react-router-dom"
 import {
   CheckCircle2,
@@ -8,8 +8,10 @@ import {
   Clock,
   ArrowRight,
   ShieldCheck,
+  ShieldAlert,
   MailCheck,
   RotateCcw,
+  RefreshCw,
 } from "lucide-react"
 import { paymentsApi } from "@/lib/api/payments"
 import { bookingsApi } from "@/lib/api/bookings"
@@ -19,6 +21,8 @@ import type { PaymentStatus } from "@/types/payment.types"
 export function PaymentResultPage() {
   const [searchParams] = useSearchParams()
 
+  const queryBookingId = searchParams.get("bookingId") || ""
+  const sessionId = searchParams.get("session_id") || ""
   const ref = searchParams.get("ref") || ""
   const gatewayStatus = searchParams.get("gateway") || "pending"
 
@@ -26,63 +30,72 @@ export function PaymentResultPage() {
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus | null>(null)
   const [isPolling, setIsPolling] = useState(gatewayStatus !== "failed")
   const [pollCount, setPollCount] = useState(0)
+  const [isRefreshing, setIsRefreshing] = useState(false)
 
-  // Find booking on mount
+  const fetchStatus = useCallback(async (isManual = false) => {
+    if (isManual) setIsRefreshing(true)
+    try {
+      const savedBookingId = sessionStorage.getItem("pending_booking_id")
+      let bId = queryBookingId || savedBookingId
+      if (!bId) {
+        const listRes = await bookingsApi.listMyBookings({ pageSize: 5 })
+        if (listRes.data.length > 0) {
+          bId = listRes.data[0].id
+        }
+      }
+
+      if (bId) {
+        const [bookingRes, payRes] = await Promise.all([
+          bookingsApi.getMyBooking(bId),
+          paymentsApi.getPaymentStatus(bId).catch(() => null),
+        ])
+
+        setBooking(bookingRes.data)
+        if (payRes) setPaymentStatus(payRes.data)
+
+        if (
+          bookingRes.data.status === "CONFIRMED" ||
+          bookingRes.data.status === "EXPIRED" ||
+          payRes?.data?.payment?.status === "PAID" ||
+          payRes?.data?.payment?.status === "PAID_REVIEW" ||
+          pollCount >= 8
+        ) {
+          setIsPolling(false)
+        } else if (!isManual) {
+          setPollCount((prev) => prev + 1)
+        }
+      } else {
+        setIsPolling(false)
+      }
+    } catch {
+      setIsPolling(false)
+    } finally {
+      if (isManual) setIsRefreshing(false)
+    }
+  }, [pollCount, queryBookingId])
+
+  // Find booking on mount and poll
   useEffect(() => {
     let isMounted = true
-    const savedBookingId = sessionStorage.getItem("pending_booking_id")
-
-    async function checkStatus() {
-      try {
-        let bId = savedBookingId
-        if (!bId) {
-          const listRes = await bookingsApi.listMyBookings({ pageSize: 5 })
-          if (listRes.data.length > 0) {
-            bId = listRes.data[0].id
-          }
-        }
-
-        if (bId) {
-          const [bookingRes, payRes] = await Promise.all([
-            bookingsApi.getMyBooking(bId),
-            paymentsApi.getPaymentStatus(bId).catch(() => null),
-          ])
-
-          if (isMounted) {
-            setBooking(bookingRes.data)
-            if (payRes) setPaymentStatus(payRes.data)
-
-            // If booking is already CONFIRMED or EXPIRED or poll reached max attempts, stop polling
-            if (
-              bookingRes.data.status === "CONFIRMED" ||
-              bookingRes.data.status === "EXPIRED" ||
-              pollCount >= 6
-            ) {
-              setIsPolling(false)
-            } else {
-              setPollCount((prev) => prev + 1)
-            }
-          }
-        } else {
-          if (isMounted) setIsPolling(false)
-        }
-      } catch {
-        if (isMounted) setIsPolling(false)
-      }
-    }
 
     if (gatewayStatus === "failed") {
       return
     }
 
     if (isPolling) {
-      const timer = setTimeout(checkStatus, 1500)
+      const timer = setTimeout(() => {
+        if (isMounted) fetchStatus(false)
+      }, 1500)
       return () => {
         isMounted = false
         clearTimeout(timer)
       }
     }
-  }, [gatewayStatus, isPolling, pollCount])
+  }, [fetchStatus, gatewayStatus, isPolling])
+
+  function handleManualRefresh() {
+    fetchStatus(true)
+  }
 
   // If gateway reported failure
   if (gatewayStatus === "failed") {
@@ -106,6 +119,11 @@ export function PaymentResultPage() {
           {ref && (
             <div className="mt-4 inline-block rounded-xl bg-gray-50 px-3.5 py-1.5 text-xs font-mono text-gray-600 border border-gray-100">
               Mã tham chiếu: <span className="font-bold text-gray-900">{ref}</span>
+            </div>
+          )}
+          {sessionId && (
+            <div className="mt-2 inline-block rounded-xl bg-gray-50 px-3.5 py-1 text-[11px] font-mono text-gray-500 border border-gray-100 max-w-xs truncate">
+              Session: <span className="font-semibold text-gray-700">{sessionId}</span>
             </div>
           )}
 
@@ -144,7 +162,9 @@ export function PaymentResultPage() {
     )
   }
 
-  const isConfirmed = booking?.status === "CONFIRMED"
+  const isConfirmed = booking?.status === "CONFIRMED" || paymentStatus?.payment?.status === "PAID"
+  const isPaidReview = paymentStatus?.payment?.status === "PAID_REVIEW"
+  const isPending = !isConfirmed && !isPaidReview
   const depositVnd = paymentStatus?.depositAmountVnd ?? booking?.depositAmountVnd ?? 0
   const remainingVnd = paymentStatus?.remainingAmountVnd ?? booking?.remainingAmountVnd ?? 0
   const totalVnd = paymentStatus?.totalAmountVnd ?? booking?.totalAmountVnd ?? 0
@@ -153,10 +173,20 @@ export function PaymentResultPage() {
     <div className="py-10 max-w-xl mx-auto">
       <div className="overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-lg">
         {/* Banner header */}
-        <div className={`p-6 text-white text-center ${isConfirmed ? "bg-gradient-to-r from-emerald-800 to-green-700" : "bg-gradient-to-r from-amber-700 to-yellow-600"}`}>
+        <div
+          className={`p-6 text-white text-center ${
+            isConfirmed
+              ? "bg-gradient-to-r from-emerald-800 to-green-700"
+              : isPaidReview
+              ? "bg-gradient-to-r from-blue-800 to-indigo-700"
+              : "bg-gradient-to-r from-amber-700 to-yellow-600"
+          }`}
+        >
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white/20 backdrop-blur-xs mb-3">
             {isConfirmed ? (
               <CheckCircle2 className="h-8 w-8 text-[#B4FF00]" />
+            ) : isPaidReview ? (
+              <ShieldAlert className="h-8 w-8 text-blue-200" />
             ) : (
               <Clock className="h-8 w-8 text-amber-200" />
             )}
@@ -165,11 +195,17 @@ export function PaymentResultPage() {
             KẾT QUẢ GIAO DỊCH THANH TOÁN
           </p>
           <h1 className="mt-1 text-2xl font-black">
-            {isConfirmed ? "ĐẶT CỌC THÀNH CÔNG!" : "ĐANG CHỜ XÁC NHẬN"}
+            {isConfirmed
+              ? "ĐẶT CỌC THÀNH CÔNG!"
+              : isPaidReview
+              ? "CHỜ ĐỐI SOÁT (PAID_REVIEW)"
+              : "ĐANG CHỜ XÁC NHẬN"}
           </h1>
           <p className="mt-1 text-xs text-white/80">
             {isConfirmed
               ? "Đơn đặt sân của bạn đã được xác nhận chính thức trên hệ thống."
+              : isPaidReview
+              ? "Giao dịch thanh toán cọc đã được ghi nhận. Hệ thống đang tiến hành đối soát và người quản lý sẽ cập nhật đơn."
               : "Giao dịch đang được cổng thanh toán xử lý thêm."}
           </p>
         </div>
@@ -201,6 +237,24 @@ export function PaymentResultPage() {
                 </span>
               </div>
 
+              {ref && (
+                <div className="flex items-center justify-between text-xs border-t border-gray-200/60 pt-2.5">
+                  <span className="text-gray-500">Mã tham chiếu (Ref):</span>
+                  <span className="font-mono font-semibold text-gray-700 bg-white px-2 py-0.5 rounded border border-gray-200">
+                    {ref}
+                  </span>
+                </div>
+              )}
+
+              {sessionId && (
+                <div className="flex items-center justify-between text-xs border-t border-gray-200/60 pt-2.5">
+                  <span className="text-gray-500">Mã phiên thanh toán (Stripe):</span>
+                  <span className="font-mono text-[11px] text-gray-700 bg-white px-2 py-0.5 rounded border border-gray-200 max-w-[200px] truncate" title={sessionId}>
+                    {sessionId}
+                  </span>
+                </div>
+              )}
+
               {totalVnd > 0 && (
                 <div className="flex items-center justify-between text-xs border-t border-gray-200/60 pt-2.5">
                   <span className="text-gray-500">Tổng chi phí dự kiến:</span>
@@ -227,6 +281,36 @@ export function PaymentResultPage() {
                   </div>
                 </>
               )}
+            </div>
+          )}
+
+          {/* PAID_REVIEW Alert Box */}
+          {isPaidReview && (
+            <div className="mt-5 rounded-2xl border border-blue-200 bg-blue-50/70 p-4 text-xs text-blue-950 flex items-start gap-3">
+              <ShieldAlert className="h-5 w-5 text-blue-600 shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <p className="font-bold text-blue-900">
+                  Giao dịch thanh toán cọc cần đối soát thủ công
+                </p>
+                <p className="text-[11px] leading-relaxed text-blue-800">
+                  Cổng thanh toán đã nhận tiền cọc của bạn. Vì giao dịch được ghi nhận sau hạn hoặc cần kiểm duyệt bổ sung, quản trị viên sẽ đối soát và xử lý đơn đặt sân của bạn sớm nhất.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Pending Alert Box */}
+          {isPending && (
+            <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50/70 p-4 text-xs text-amber-950 flex items-start gap-3">
+              <Clock className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <p className="font-bold text-amber-900">
+                  Chờ phản hồi từ cổng thanh toán
+                </p>
+                <p className="text-[11px] leading-relaxed text-amber-800">
+                  Nếu bạn vừa hoàn tất thanh toán thẻ trên cổng thanh toán, vui lòng bấm nút &quot;Làm mới trạng thái&quot; bên dưới để kiểm tra lại kết quả.
+                </p>
+              </div>
             </div>
           )}
 
@@ -257,6 +341,19 @@ export function PaymentResultPage() {
                 <ArrowRight className="h-4 w-4" />
               </Link>
             )}
+
+            {/* Manual refresh button */}
+            <button
+              type="button"
+              id="payment-refresh-btn"
+              onClick={handleManualRefresh}
+              disabled={isRefreshing}
+              className="flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-5 py-3 text-xs font-bold text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-60"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 text-gray-500 ${isRefreshing ? "animate-spin text-emerald-600" : ""}`} />
+              <span>{isRefreshing ? "Đang đồng bộ trạng thái…" : "Làm mới trạng thái (Kiểm tra lại)"}</span>
+            </button>
+
             <Link
               to="/bookings"
               className="flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-5 py-3 text-xs font-bold text-gray-700 hover:bg-gray-50 transition-colors"

@@ -253,7 +253,7 @@ export function CourtDetailPage() {
           {priceDisplay && (
             <div className="mt-3 rounded-xl bg-gray-50 px-3 py-2 text-xs text-gray-500">
               <span className="font-semibold text-gray-700">{priceDisplay}</span>
-              {" "}· Giá tham khảo (không thu tiền MVP)
+              {" "}· Giá niêm yết theo khung giờ
             </div>
           )}
 

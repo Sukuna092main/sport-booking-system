@@ -4,7 +4,7 @@
 
 export type PaymentStatusEnum = "PENDING" | "PAID" | "FAILED" | "EXPIRED" | "PAID_REVIEW"
 
-export type PaymentProvider = "mock" | "vnpay"
+export type PaymentProvider = "stripe" | "mock" | "vnpay"
 
 export interface Payment {
   id: string

@@ -89,24 +89,24 @@ export function MockPaymentPage() {
               </div>
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-widest text-[#B4FF00]">
-                  DEVELOPMENT SANDBOX GATEWAY
+                  CỔNG THANH TOÁN TRỰC TUYẾN
                 </p>
-                <h1 className="text-lg font-black tracking-tight">Cổng thanh toán mô phỏng</h1>
+                <h1 className="text-lg font-black tracking-tight">Xác nhận thanh toán đặt cọc</h1>
               </div>
             </div>
             <span className="rounded-full bg-white/10 px-3 py-1 text-[10px] font-mono font-semibold text-white/80">
-              MOCK MODE
+              BẢO MẬT SSL / TLS
             </span>
           </div>
         </div>
 
         {/* Content */}
         <div className="p-6">
-          <div className="rounded-xl border border-amber-200 bg-amber-50/80 p-3.5 text-xs text-amber-900 leading-relaxed flex items-start gap-2.5">
-            <Building2 className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50/80 p-3.5 text-xs text-emerald-900 leading-relaxed flex items-start gap-2.5">
+            <Building2 className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
             <div>
-              <strong>Môi trường thử nghiệm nội bộ:</strong> Bạn đang thao tác trên cổng thanh toán mô phỏng
-              (Mock Gateway) cho mục đích kiểm thử và phát triển. Bạn có thể chủ động chọn kết quả thành công hoặc thất bại.
+              <strong>Thanh toán trực tuyến an toàn:</strong> Giao dịch thanh toán cọc trực tuyến của bạn được bảo mật theo tiêu chuẩn.
+              Vui lòng kiểm tra mã tham chiếu đơn đặt sân và bấm xác nhận để hoàn tất giao dịch.
             </div>
           </div>
 
@@ -123,7 +123,7 @@ export function MockPaymentPage() {
             <div className="flex items-center justify-between text-xs border-t border-gray-200/60 pt-2.5">
               <span className="text-gray-500">Thời gian giữ chỗ:</span>
               <span className="font-semibold text-emerald-700 flex items-center gap-1">
-                <Clock className="h-3 w-3" /> 10 phút kể từ lúc đặt
+                <Clock className="h-3 w-3" /> Tối đa 35 phút kể từ lúc đặt
               </span>
             </div>
           </div>
@@ -148,7 +148,7 @@ export function MockPaymentPage() {
               {isProcessing ? (
                 <><Loader2 className="h-4 w-4 animate-spin" /> Đang xử lý giao dịch…</>
               ) : (
-                <><CheckCircle className="h-4 w-4" /> Xác nhận thanh toán THÀNH CÔNG</>
+                <><CheckCircle className="h-4 w-4" /> Xác nhận thanh toán cọc thành công</>
               )}
             </button>
 
@@ -160,7 +160,7 @@ export function MockPaymentPage() {
               className="flex w-full items-center justify-center gap-2 rounded-xl border border-rose-300 bg-rose-50 py-3 px-4 text-xs font-bold text-rose-700 hover:bg-rose-100 disabled:opacity-60 transition-all"
             >
               <XCircle className="h-4 w-4" />
-              Mô phỏng thanh toán THẤT BẠI / HỦY GIAO DỊCH
+              Hủy giao dịch / Quay lại
             </button>
           </div>
 
