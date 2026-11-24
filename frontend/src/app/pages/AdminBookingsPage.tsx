@@ -4,7 +4,10 @@ import {
   AlertCircle,
   BookmarkCheck,
   CheckCircle,
+  CheckCircle2,
+  TrendingUp,
   X,
+  XCircle,
 } from "lucide-react"
 import type { BookingStatus } from "@/features/bookings/types"
 import type { AdminBookingItem } from "@/types/adminBooking.types"
@@ -14,6 +17,7 @@ import {
 } from "@/features/admin/courts/useAdminCourts"
 import {
   useAdminBookings,
+  useAdminStatistics,
 } from "@/features/admin/bookings/useAdminBookings"
 import { AdminBookingFilters } from "@/features/admin/bookings/AdminBookingFilters"
 import { AdminBookingTable } from "@/features/admin/bookings/AdminBookingTable"
@@ -123,6 +127,15 @@ export function AdminBookingsPage() {
   const { data: courtsData } = useAdminCourts({ pageSize: 100 })
   const { data: sportTypes } = useAdminSportTypes()
 
+  // Statistics for recent 30 days
+  const todayStr = useMemo(() => new Date().toISOString().split("T")[0], [])
+  const lastMonthStr = useMemo(() => {
+    const d = new Date()
+    d.setDate(d.getDate() - 30)
+    return d.toISOString().split("T")[0]
+  }, [])
+  const { data: statsData } = useAdminStatistics(lastMonthStr, todayStr)
+
   const courts = useMemo(() => courtsData?.data ?? [], [courtsData?.data])
   const courtMap = useMemo(() => {
     return new Map(courts.map((c) => [c.id, c]))
@@ -180,6 +193,54 @@ export function AdminBookingsPage() {
           </h2>
           <p className="mt-0.5 text-xs text-gray-500">
             Tra cứu toàn bộ lượt đặt sân, lọc theo sân/ngày/trạng thái và hủy booking khi phát sinh sự cố hoặc bảo trì
+          </p>
+        </div>
+      </div>
+
+      {/* ── KPI Statistics Cards ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-gray-500">Tổng lượt đặt sân (30 ngày)</span>
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700">
+              <TrendingUp className="h-4 w-4" />
+            </div>
+          </div>
+          <p className="mt-2 text-2xl font-black text-gray-900">
+            {statsData?.totalBookings ?? totalItems}
+          </p>
+          <p className="mt-0.5 text-[11px] text-gray-400">
+            Kỳ thống kê từ {lastMonthStr} đến {todayStr}
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-gray-500">Đơn đã xác nhận (Confirmed)</span>
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-green-50 text-green-700">
+              <CheckCircle2 className="h-4 w-4" />
+            </div>
+          </div>
+          <p className="mt-2 text-2xl font-black text-emerald-700">
+            {statsData?.confirmedBookings ?? "—"}
+          </p>
+          <p className="mt-0.5 text-[11px] text-emerald-600 font-medium">
+            Tỷ lệ lấp đầy sân khả dụng
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-gray-500">Đơn đã hủy (Cancelled)</span>
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-rose-50 text-rose-700">
+              <XCircle className="h-4 w-4" />
+            </div>
+          </div>
+          <p className="mt-2 text-2xl font-black text-rose-700">
+            {statsData?.cancelledBookings ?? "—"}
+          </p>
+          <p className="mt-0.5 text-[11px] text-gray-400">
+            Đã giải phóng khung giờ
           </p>
         </div>
       </div>

@@ -419,7 +419,7 @@ export function BookingDetailPage() {
               </div>
             ) : (
               <div className="rounded-xl border border-gray-100 bg-gray-50/50 p-4">
-                <p className="text-[10px] font-bold uppercase text-gray-400">Giá tham chiếu (MVP)</p>
+                <p className="text-[10px] font-bold uppercase text-gray-400">Giá tham chiếu tiêu chuẩn</p>
                 <p className="mt-1 text-sm font-bold text-gray-900 flex items-center gap-1.5">
                   <Tag className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
                   <span>{priceInfo.totalText}</span>

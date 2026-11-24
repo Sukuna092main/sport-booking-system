@@ -531,7 +531,9 @@ export function BookingReviewPage() {
               >
                 <div className="flex items-center gap-2 font-black text-sm text-emerald-900">
                   <CheckCircle className="h-5 w-5 text-emerald-600 shrink-0" />
-                  Đặt sân thành công!
+                  {submitResult.booking?.status === "PENDING_PAYMENT"
+                    ? "Đã tạo đơn đặt sân — Chờ đặt cọc"
+                    : "Đặt sân thành công!"}
                 </div>
                 <div className="mt-3 space-y-1.5 rounded-xl bg-white/80 p-3 border border-emerald-100">
                   <div className="flex items-center justify-between">
@@ -542,32 +544,69 @@ export function BookingReviewPage() {
                   </div>
                   <div className="flex items-center justify-between text-[11px]">
                     <span className="text-gray-500">Trạng thái:</span>
-                    <span className="font-bold text-emerald-700">CONFIRMED</span>
+                    <span className={`font-bold ${submitResult.booking?.status === "PENDING_PAYMENT" ? "text-amber-700" : "text-emerald-700"}`}>
+                      {submitResult.booking?.status || "CONFIRMED"}
+                    </span>
                   </div>
+                  {submitResult.booking?.status === "PENDING_PAYMENT" && depositCalculatedVnd > 0 && (
+                    <div className="flex items-center justify-between text-[11px] border-t border-emerald-100/60 pt-1.5">
+                      <span className="text-gray-500">Tiền cọc cần thanh toán (30%):</span>
+                      <span className="font-bold text-emerald-800">
+                        {depositCalculatedVnd.toLocaleString("vi-VN")} VND
+                      </span>
+                    </div>
+                  )}
                 </div>
 
-                {/* Email notification notice */}
-                <div className="mt-3 rounded-xl border border-emerald-200 bg-white/80 p-2.5 text-[11px] text-emerald-900 flex items-start gap-2">
-                  <MailCheck className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
-                  <span>
-                    Email xác nhận đã được gửi đến hộp thư của bạn. Hệ thống sẽ tiếp tục gửi email nhắc lịch trước giờ thi đấu 24 tiếng.
-                  </span>
-                </div>
+                {submitResult.booking?.status === "CONFIRMED" ? (
+                  <div className="mt-3 rounded-xl border border-emerald-200 bg-white/80 p-2.5 text-[11px] text-emerald-900 flex items-start gap-2">
+                    <MailCheck className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <span>
+                      Email xác nhận đã được gửi đến hộp thư của bạn. Hệ thống sẽ tiếp tục gửi email nhắc lịch trước giờ thi đấu 24 tiếng.
+                    </span>
+                  </div>
+                ) : (
+                  <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50/80 p-2.5 text-[11px] text-amber-900 flex items-start gap-2">
+                    <Clock className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                    <span>
+                      Vui lòng tiến hành thanh toán cọc trực tuyến để giữ chỗ chính thức.
+                    </span>
+                  </div>
+                )}
 
                 <div className="mt-4 space-y-2">
+                  {submitResult.booking?.status === "PENDING_PAYMENT" && submitResult.bookingId && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          const res = await paymentsApi.startPayment(submitResult.bookingId!)
+                          if (res.data.checkoutUrl) {
+                            window.location.href = res.data.checkoutUrl
+                          }
+                        } catch {
+                          navigate(`/bookings/${submitResult.bookingId}`)
+                        }
+                      }}
+                      className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-[#16A34A] px-4 py-2.5 text-xs font-black text-white hover:bg-[#15803D] transition-colors shadow-xs"
+                    >
+                      <CreditCard className="h-4 w-4" />
+                      Tiến hành thanh toán cọc ngay →
+                    </button>
+                  )}
                   {submitResult.bookingId && (
                     <button
                       type="button"
                       onClick={() => navigate(`/bookings/${submitResult.bookingId}`)}
-                      className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-emerald-700 px-4 py-2.5 text-xs font-bold text-white hover:bg-emerald-800 transition-colors"
+                      className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-gray-900 px-4 py-2.5 text-xs font-bold text-white hover:bg-gray-800 transition-colors"
                     >
-                      Xem chi tiết Booking này →
+                      Xem chi tiết Booking này
                     </button>
                   )}
                   <button
                     type="button"
                     onClick={() => navigate("/bookings")}
-                    className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-emerald-300 bg-white px-4 py-2 text-xs font-bold text-emerald-800 hover:bg-emerald-50 transition-colors"
+                    className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-gray-200 bg-white px-4 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50 transition-colors"
                   >
                     Về danh sách Booking của tôi
                   </button>
