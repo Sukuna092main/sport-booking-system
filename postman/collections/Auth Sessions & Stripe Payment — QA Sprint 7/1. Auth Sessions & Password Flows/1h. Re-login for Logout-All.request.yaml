@@ -1,0 +1,21 @@
+$kind: http-request
+name: 1h. Re-login for Logout-All
+url: "{{baseUrl}}/auth/login"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "email": "{{testEmail}}",
+      "password": "{{newPassword}}"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('1h: Re-login returns 200', () => pm.response.to.have.status(200));
+      const res = pm.response.json();
+      pm.collectionVariables.set('userToken', res.data.accessToken);
+    language: text/javascript
+order: 8000

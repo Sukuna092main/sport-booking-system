@@ -1,0 +1,21 @@
+$kind: http-request
+name: 3a. Start Stripe Checkout
+url: "{{baseUrl}}/bookings/{{bookingId}}/payments"
+method: POST
+auth:
+  type: bearer
+  credentials:
+    token: "{{userToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('3a: Start checkout returns 201', () => pm.response.to.have.status(201));
+      const res = pm.response.json();
+      pm.collectionVariables.set('orderRef', res.data.providerOrderRef);
+      pm.collectionVariables.set('amountVnd', String(res.data.amountVnd));
+      pm.collectionVariables.set('checkoutUrl', res.data.checkoutUrl);
+      pm.test('3a: Provider is stripe', () => pm.expect(res.data.provider).to.eql('stripe'));
+      pm.test('3a: Status is PENDING', () => pm.expect(res.data.status).to.eql('PENDING'));
+      pm.test('3a: Checkout URL is Stripe hosted', () => pm.expect(res.data.checkoutUrl).to.include('https://checkout.stripe.com/'));
+    language: text/javascript
+order: 1000

@@ -1,0 +1,13 @@
+$kind: http-request
+name: 1a. Refresh Access Token
+url: "{{baseUrl}}/auth/refresh"
+method: POST
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('1a: Refresh returns 200', () => pm.response.to.have.status(200));
+      const res = pm.response.json();
+      pm.collectionVariables.set('userToken', res.data.accessToken);
+      pm.test('1a: New access token returned', () => pm.expect(res.data.accessToken).to.be.a('string').and.not.empty);
+    language: text/javascript
+order: 1000
