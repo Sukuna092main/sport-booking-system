@@ -1,0 +1,46 @@
+$kind: collection
+description: |-
+  Bộ kiểm thử tự động cho các tính năng mới (PR #55, #56, #57):
+  - Auth Sessions: Refresh Token (HttpOnly cookie), Logout, Logout All, Forgot/Change Password.
+  - Court Pricing & Deposit Booking (30% cọc, giữ chỗ 35 phút).
+  - Stripe Checkout Session & Webhook HMAC-SHA256.
+
+  TRƯỚC KHI BẤM RUN:
+  1. Đảm bảo Backend đang chạy ở http://localhost:8080 (hoặc đổi biến baseUrl).
+  2. Điền biến stripeWebhookSecret (whsec_...) trong Collection Variables rồi lưu lại (không commit secret thật lên Git).
+variables:
+  baseUrl: http://localhost:8080/api/v1
+  stripeWebhookSecret: ""
+  adminEmail: qa-s4-admin@example.test
+  adminPassword: password123
+  targetDate: ""
+  testEmail: ""
+  testPassword: Password123@
+  newPassword: NewPassword123@
+  userToken: ""
+  adminToken: ""
+  courtId: ""
+  slotId: ""
+  bookingId: ""
+  bookingCode: ""
+  orderRef: ""
+  amountVnd: ""
+  checkoutUrl: ""
+  idemKey: ""
+  webhookBody: ""
+  stripeSignature: ""
+scripts:
+  - type: http:beforeRequest
+    code: |-
+      if (!pm.collectionVariables.get('targetDate')) {
+        const d = new Date();
+        d.setDate(d.getDate() + 3);
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        pm.collectionVariables.set('targetDate', `${yyyy}-${mm}-${dd}`);
+      }
+      if (!pm.collectionVariables.get('testEmail')) {
+        pm.collectionVariables.set('testEmail', `s7-stripe-${Date.now()}@example.test`);
+      }
+    language: text/javascript

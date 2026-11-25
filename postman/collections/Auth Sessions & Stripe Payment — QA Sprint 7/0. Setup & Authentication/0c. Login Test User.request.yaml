@@ -1,0 +1,22 @@
+$kind: http-request
+name: 0c. Login Test User
+url: "{{baseUrl}}/auth/login"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "email": "{{testEmail}}",
+      "password": "{{testPassword}}"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('0c: Login returns 200', () => pm.response.to.have.status(200));
+      const res = pm.response.json();
+      pm.collectionVariables.set('userToken', res.data.accessToken);
+      pm.test('0c: Access token issued', () => pm.expect(res.data.accessToken).to.be.a('string').and.not.empty);
+    language: text/javascript
+order: 3000

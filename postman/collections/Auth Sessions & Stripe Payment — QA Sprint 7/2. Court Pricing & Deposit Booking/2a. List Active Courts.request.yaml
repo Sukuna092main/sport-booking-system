@@ -1,0 +1,14 @@
+$kind: http-request
+name: 2a. List Active Courts
+url: "{{baseUrl}}/courts"
+method: GET
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('2a: List courts returns 200', () => pm.response.to.have.status(200));
+      const res = pm.response.json();
+      pm.test('2a: At least 1 court exists', () => pm.expect(res.data.length).to.be.above(0));
+      const court = res.data.find(c => c.code === 'QA-S2-BD-01') || res.data[0];
+      pm.collectionVariables.set('courtId', court.id);
+    language: text/javascript
+order: 1000

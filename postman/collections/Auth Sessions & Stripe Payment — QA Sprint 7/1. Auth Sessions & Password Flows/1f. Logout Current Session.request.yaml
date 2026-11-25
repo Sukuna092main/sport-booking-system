@@ -1,0 +1,10 @@
+$kind: http-request
+name: 1f. Logout Current Session
+url: "{{baseUrl}}/auth/logout"
+method: POST
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('1f: Logout returns 200', () => pm.response.to.have.status(200));
+    language: text/javascript
+order: 6000
