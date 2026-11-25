@@ -163,7 +163,7 @@ func (r *SQLRepository) SetPricing(ctx context.Context, courtID, actorID, reques
 		return Pricing{}, err
 	}
 	if _, err = tx.ExecContext(ctx, `INSERT INTO audit_logs(actor_user_id,action,entity_type,entity_id,details,request_id)
-		VALUES ($1,'COURT_PRICING_UPDATED','court',$2,jsonb_build_object('pricePerSlotVnd',$3,'isActive',$4),$5)`, actorID, courtID, price, active, requestID); err != nil {
+		VALUES ($1,'COURT_PRICING_UPDATED','court',$2,jsonb_build_object('pricePerSlotVnd',$3::bigint,'isActive',$4::boolean),$5)`, actorID, courtID, price, active, requestID); err != nil {
 		return Pricing{}, err
 	}
 	return value, tx.Commit()
