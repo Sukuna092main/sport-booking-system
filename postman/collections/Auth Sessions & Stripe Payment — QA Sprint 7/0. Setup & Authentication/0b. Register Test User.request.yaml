@@ -1,0 +1,22 @@
+$kind: http-request
+name: 0b. Register Test User
+url: "{{baseUrl}}/auth/register"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "email": "{{testEmail}}",
+      "password": "{{testPassword}}",
+      "fullName": "QA Sprint 7 Stripe"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('0b: Register returns 201', () => pm.response.to.have.status(201));
+      const res = pm.response.json();
+      pm.test('0b: Role is USER', () => pm.expect(res.data.role).to.eql('USER'));
+    language: text/javascript
+order: 2000

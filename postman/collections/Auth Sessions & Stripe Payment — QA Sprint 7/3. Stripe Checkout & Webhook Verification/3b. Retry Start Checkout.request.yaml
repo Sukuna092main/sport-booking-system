@@ -1,0 +1,17 @@
+$kind: http-request
+name: 3b. Retry Start Checkout
+url: "{{baseUrl}}/bookings/{{bookingId}}/payments"
+method: POST
+auth:
+  type: bearer
+  credentials:
+    token: "{{userToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('3b: Retry checkout returns 201', () => pm.response.to.have.status(201));
+      const res = pm.response.json();
+      pm.test('3b: Reuses same orderRef', () => pm.expect(res.data.providerOrderRef).to.eql(pm.collectionVariables.get('orderRef')));
+      pm.test('3b: Reuses same checkoutUrl', () => pm.expect(res.data.checkoutUrl).to.eql(pm.collectionVariables.get('checkoutUrl')));
+    language: text/javascript
+order: 2000

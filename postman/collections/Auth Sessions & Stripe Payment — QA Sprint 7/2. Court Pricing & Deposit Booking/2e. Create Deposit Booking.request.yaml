@@ -1,0 +1,36 @@
+$kind: http-request
+name: 2e. Create Deposit Booking
+url: "{{baseUrl}}/bookings"
+method: POST
+headers:
+  Content-Type: application/json
+  Idempotency-Key: "{{idemKey}}"
+body:
+  type: json
+  content: |-
+    {
+      "courtId": "{{courtId}}",
+      "bookingDate": "{{targetDate}}",
+      "timeSlotIds": ["{{slotId}}"]
+    }
+auth:
+  type: bearer
+  credentials:
+    token: "{{userToken}}"
+scripts:
+  - type: beforeRequest
+    code: |-
+      pm.collectionVariables.set('idemKey', `s7-stripe-${Date.now()}-${Math.floor(Math.random() * 10000)}`);
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      pm.test('2e: Create booking returns 201', () => pm.response.to.have.status(201));
+      const res = pm.response.json();
+      pm.collectionVariables.set('bookingId', res.data.id);
+      pm.collectionVariables.set('bookingCode', res.data.bookingCode);
+      pm.test('2e: Status is PENDING_PAYMENT', () => pm.expect(res.data.status).to.eql('PENDING_PAYMENT'));
+      pm.test('2e: Total is 50000 VND', () => pm.expect(res.data.totalAmountVnd).to.eql(50000));
+      pm.test('2e: Deposit is 15000 VND (30%)', () => pm.expect(res.data.depositAmountVnd).to.eql(15000));
+      pm.test('2e: Remaining is 35000 VND', () => pm.expect(res.data.remainingAmountVnd).to.eql(35000));
+    language: text/javascript
+order: 5000

@@ -1,0 +1,18 @@
+$kind: http-request
+name: 2d. Check Availability & Pick Slot
+url: "{{baseUrl}}/courts/{{courtId}}/availability?date={{targetDate}}"
+method: GET
+queryParams:
+  - key: date
+    value: "{{targetDate}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('2d: Availability returns 200', () => pm.response.to.have.status(200));
+      const res = pm.response.json();
+      const slots = res.data.slots || [];
+      const avail = slots.find(s => s.status === 'AVAILABLE');
+      pm.test('2d: Found available slot', () => pm.expect(avail, 'No AVAILABLE slot on targetDate').to.not.be.undefined);
+      if (avail) pm.collectionVariables.set('slotId', avail.timeSlotId);
+    language: text/javascript
+order: 4000

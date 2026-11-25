@@ -1,0 +1,17 @@
+$kind: http-request
+name: 3d. Webhook Invalid Signature Rejected
+url: "{{baseUrl}}/payments/stripe/webhook"
+method: POST
+headers:
+  Content-Type: application/json
+  Stripe-Signature: t=1700000000,v1=deadbeef
+body:
+  type: json
+  content: |-
+    {"id":"evt_invalid","type":"checkout.session.completed"}
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('3d: Invalid webhook signature rejected with 400', () => pm.response.to.have.status(400));
+    language: text/javascript
+order: 4000

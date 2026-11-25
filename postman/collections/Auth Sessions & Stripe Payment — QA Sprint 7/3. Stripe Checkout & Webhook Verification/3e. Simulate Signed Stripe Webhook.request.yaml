@@ -1,0 +1,45 @@
+$kind: http-request
+name: 3e. Simulate Signed Stripe Webhook
+url: "{{baseUrl}}/payments/stripe/webhook"
+method: POST
+headers:
+  Content-Type: application/json
+  Stripe-Signature: "{{stripeSignature}}"
+body:
+  type: json
+  content: "{{webhookBody}}"
+scripts:
+  - type: beforeRequest
+    code: |-
+      const secret = pm.collectionVariables.get('stripeWebhookSecret');
+      if (!secret) {
+        throw new Error('Vui long dien stripeWebhookSecret (whsec_...) vao Collection Variables truoc khi Run!');
+      }
+      const suffix = `${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+      const payload = {
+        id: `evt_postman_${suffix}`,
+        type: 'checkout.session.completed',
+        data: {
+          object: {
+            id: `cs_test_postman_${suffix}`,
+            object: 'checkout.session',
+            client_reference_id: pm.collectionVariables.get('orderRef'),
+            amount_total: Number(pm.collectionVariables.get('amountVnd')),
+            currency: 'vnd',
+            payment_status: 'paid'
+          }
+        }
+      };
+      const rawBody = JSON.stringify(payload);
+      const timestamp = Math.floor(Date.now() / 1000).toString();
+      const sig = CryptoJS.HmacSHA256(`${timestamp}.${rawBody}`, secret).toString(CryptoJS.enc.Hex);
+      pm.collectionVariables.set('webhookBody', rawBody);
+      pm.collectionVariables.set('stripeSignature', `t=${timestamp},v1=${sig}`);
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      pm.test('3e: Signed webhook accepted with 200', () => pm.response.to.have.status(200));
+      const res = pm.response.json();
+      pm.test('3e: received is true', () => pm.expect(res.received).to.eql(true));
+    language: text/javascript
+order: 5000

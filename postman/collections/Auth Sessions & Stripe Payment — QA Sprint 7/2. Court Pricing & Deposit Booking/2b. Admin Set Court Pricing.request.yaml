@@ -1,0 +1,26 @@
+$kind: http-request
+name: 2b. Admin Set Court Pricing
+url: "{{baseUrl}}/admin/courts/{{courtId}}/pricing"
+method: PUT
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "pricePerSlotVnd": 50000,
+      "isActive": true
+    }
+auth:
+  type: bearer
+  credentials:
+    token: "{{adminToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('2b: Set pricing returns 200', () => pm.response.to.have.status(200));
+      const res = pm.response.json();
+      pm.test('2b: Price is 50000 VND', () => pm.expect(res.data.pricePerSlotVnd).to.eql(50000));
+      pm.test('2b: Pricing is active', () => pm.expect(res.data.isActive).to.eql(true));
+    language: text/javascript
+order: 2000

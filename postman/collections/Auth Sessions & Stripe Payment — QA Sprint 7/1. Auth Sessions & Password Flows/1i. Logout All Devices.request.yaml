@@ -1,0 +1,14 @@
+$kind: http-request
+name: 1i. Logout All Devices
+url: "{{baseUrl}}/auth/logout-all"
+method: POST
+auth:
+  type: bearer
+  credentials:
+    token: "{{userToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('1i: Logout-all returns 200', () => pm.response.to.have.status(200));
+    language: text/javascript
+order: 9000
