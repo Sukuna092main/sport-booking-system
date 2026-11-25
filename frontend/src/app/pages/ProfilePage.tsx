@@ -1,14 +1,17 @@
 import { type ReactNode, useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
+import { AxiosError } from "axios"
 import {
   Loader2, AlertCircle, Pencil, X, Check,
   User as UserIcon, Mail, Phone, Shield, Key, Activity,
-  Lock, CheckCircle2,
+  Lock, CheckCircle2, KeyRound, LogOut, Eye, EyeOff, ShieldCheck,
 } from "lucide-react"
 import { useAuth } from "@/features/auth/useAuth"
 import { useProfile } from "@/features/profile/useProfile"
 import { useUpdateProfile, parseUpdateError } from "@/features/profile/useUpdateProfile"
 import type { UpdateProfileFieldErrors } from "@/features/profile/useUpdateProfile"
+import { authApi } from "@/lib/api/auth"
+import type { ApiErrorResponse } from "@/types/auth.types"
 
 /* ──────────────────────────────────────────────
    Sub-components
@@ -72,7 +75,7 @@ function EditableField({
    ────────────────────────────────────────────── */
 
 export function ProfilePage() {
-  const { logout } = useAuth()
+  const { logout, logoutAll } = useAuth()
   const navigate = useNavigate()
 
   /* ── Data fetching ── */
@@ -87,6 +90,23 @@ export function ProfilePage() {
   const [saveError, setSaveError] = useState<string | null>(null)
   const [showSuccess, setShowSuccess] = useState(false)
 
+  /* ── Change Password Modal state ── */
+  const [showPasswordModal, setShowPasswordModal] = useState(false)
+  const [currentPassword, setCurrentPassword] = useState("")
+  const [newPassword, setNewPassword] = useState("")
+  const [confirmPassword, setConfirmPassword] = useState("")
+  const [showCurrentPw, setShowCurrentPw] = useState(false)
+  const [showNewPw, setShowNewPw] = useState(false)
+  const [passwordErrors, setPasswordErrors] = useState<{
+    currentPassword?: string
+    newPassword?: string
+    confirmPassword?: string
+  }>({})
+  const [passwordApiError, setPasswordApiError] = useState<string | null>(null)
+  const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null)
+  const [isChangingPassword, setIsChangingPassword] = useState(false)
+  const [isLoggingOutAll, setIsLoggingOutAll] = useState(false)
+
   /* Hide success banner after 3 s */
   useEffect(() => {
     if (!showSuccess) return
@@ -98,6 +118,91 @@ export function ProfilePage() {
   function handleLogout() {
     logout()
     navigate("/login", { replace: true })
+  }
+
+  async function handleLogoutAll() {
+    if (!window.confirm("Bạn có chắc chắn muốn đăng xuất khỏi tất cả các thiết bị?")) return
+    setIsLoggingOutAll(true)
+    try {
+      await logoutAll()
+      navigate("/login", { replace: true })
+    } catch {
+      logout()
+      navigate("/login", { replace: true })
+    } finally {
+      setIsLoggingOutAll(false)
+    }
+  }
+
+  /* ── Change Password Handlers ── */
+  function openPasswordModal() {
+    setCurrentPassword("")
+    setNewPassword("")
+    setConfirmPassword("")
+    setPasswordErrors({})
+    setPasswordApiError(null)
+    setPasswordSuccess(null)
+    setShowPasswordModal(true)
+  }
+
+  function closePasswordModal() {
+    setShowPasswordModal(false)
+    setPasswordApiError(null)
+  }
+
+  async function handleChangePasswordSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setPasswordApiError(null)
+
+    const errors: typeof passwordErrors = {}
+    if (!currentPassword) errors.currentPassword = "Mật khẩu hiện tại không được để trống."
+    if (!newPassword) {
+      errors.newPassword = "Mật khẩu mới không được để trống."
+    } else if (newPassword.length < 8) {
+      errors.newPassword = "Mật khẩu mới phải có tối thiểu 8 ký tự."
+    } else if (newPassword.length > 72) {
+      errors.newPassword = "Mật khẩu mới tối đa 72 ký tự."
+    }
+    if (newPassword !== confirmPassword) {
+      errors.confirmPassword = "Xác nhận mật khẩu mới không khớp."
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setPasswordErrors(errors)
+      return
+    }
+    setPasswordErrors({})
+    setIsChangingPassword(true)
+
+    try {
+      await authApi.changePassword({ currentPassword, newPassword })
+      setPasswordSuccess("Đã đổi mật khẩu thành công. Hệ thống đang chuyển về màn hình đăng nhập…")
+      setTimeout(() => {
+        logout()
+        navigate("/login", { replace: true })
+      }, 1500)
+    } catch (err: unknown) {
+      if (err instanceof AxiosError) {
+        const data = err.response?.data as ApiErrorResponse | undefined
+        const code = data?.error?.code
+        if (code === "invalid_current_password") {
+          setPasswordApiError("Mật khẩu hiện tại không chính xác.")
+        } else if (code === "validation_error" && data?.error?.details?.length) {
+          const fe: typeof passwordErrors = {}
+          data.error.details.forEach((d) => {
+            if (d.field === "currentPassword") fe.currentPassword = d.message
+            if (d.field === "newPassword") fe.newPassword = d.message
+          })
+          setPasswordErrors(fe)
+        } else {
+          setPasswordApiError(data?.error?.message ?? "Không thể đổi mật khẩu. Vui lòng thử lại.")
+        }
+      } else {
+        setPasswordApiError("Lỗi kết nối máy chủ. Vui lòng thử lại.")
+      }
+    } finally {
+      setIsChangingPassword(false)
+    }
   }
 
   /* ── Edit helpers ── */
@@ -120,12 +225,10 @@ export function ProfilePage() {
     const { name, value } = e.target
     if (name === "fullName") setEditFullName(value)
     if (name === "phone") setEditPhone(value)
-    // Clear per-field error on change
     setEditErrors((p) => ({ ...p, [name]: undefined }))
     setSaveError(null)
   }
 
-  /* ── Client-side validation (mirrors backend rules) ── */
   function validate(): UpdateProfileFieldErrors {
     const errors: UpdateProfileFieldErrors = {}
     if (!editFullName.trim()) {
@@ -140,7 +243,6 @@ export function ProfilePage() {
   }
 
   async function handleSave() {
-    // 1. Client validation
     const clientErrors = validate()
     if (Object.keys(clientErrors).length > 0) {
       setEditErrors(clientErrors)
@@ -167,7 +269,6 @@ export function ProfilePage() {
     }
   }
 
-  /* ── Fetch error (network / 500) ── */
   const fetchErrorMessage = (() => {
     if (!fetchError) return null
     const status = (fetchError as { response?: { status: number } })?.response?.status
@@ -176,7 +277,6 @@ export function ProfilePage() {
     return "Không thể tải hồ sơ. Vui lòng thử lại."
   })()
 
-  /* ── Loading state ── */
   if (isLoading) {
     return (
       <section className="flex min-h-[20rem] items-center justify-center">
@@ -186,7 +286,6 @@ export function ProfilePage() {
     )
   }
 
-  /* ── Fetch error ── */
   if (fetchErrorMessage) {
     return (
       <section className="py-10">
@@ -207,143 +306,85 @@ export function ProfilePage() {
     )
   }
 
-  /* ── No profile (should not happen after loading + no error) ── */
   if (!profile) return null
 
-  const isAdmin = profile.role === "ADMIN"
-  const initials = profile.fullName.charAt(0).toUpperCase()
   const isSaving = updateMutation.isPending
 
   return (
-    <section className="py-6">
-      {/* ── Page header ── */}
-      <div className="mb-7 flex items-start justify-between">
+    <section className="py-8">
+      {/* Page header */}
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <p className="text-xs font-bold uppercase tracking-widest text-[#16A34A]">Tài khoản của tôi</p>
-          <h1 className="mt-1 text-4xl font-black uppercase tracking-tight text-gray-900">Hồ sơ cá nhân</h1>
-          <p className="mt-1.5 text-sm text-gray-500">Xem và cập nhật thông tin cá nhân của bạn.</p>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-[#16A34A]">Tài khoản của bạn</p>
+          <h1 className="text-3xl font-black uppercase tracking-tight text-gray-900">Hồ sơ cá nhân</h1>
         </div>
         {!isEditing && (
           <button
             id="profile-edit-btn"
             onClick={startEdit}
-            className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition-all hover:border-gray-300 hover:shadow"
+            className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-4 py-2 text-xs font-semibold text-gray-700 shadow-2xs hover:bg-gray-50 transition-colors"
           >
             <Pencil className="h-3.5 w-3.5" />
-            Chỉnh sửa hồ sơ
+            Chỉnh sửa thông tin
           </button>
         )}
       </div>
 
-      {/* ── Success banner (auto-dismiss) ── */}
+      {/* Success banner */}
       {showSuccess && (
-        <div
-          role="status"
-          aria-live="polite"
-          className="mb-5 flex items-center gap-2 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700"
-        >
+        <div role="status" className="mb-6 flex items-center gap-2 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
           <CheckCircle2 className="h-4 w-4 shrink-0" />
-          Hồ sơ đã được cập nhật thành công.
+          <span>Hồ sơ đã được cập nhật thành công.</span>
         </div>
       )}
 
-      {/* ── Two-column card layout ── */}
-      <div className="grid gap-4 lg:grid-cols-[280px_1fr]">
+      {/* Save error banner */}
+      {saveError && (
+        <div role="alert" className="mb-6 flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          <span>{saveError}</span>
+        </div>
+      )}
 
-        {/* ─ Left: Avatar card (dark green) ─ */}
-        <div className="overflow-hidden rounded-2xl border border-[#1B3A1E]/30">
-          {/* Green header with field illustration */}
-          <div className="relative h-28 overflow-hidden bg-[#0A1A0D]">
-            <svg className="absolute inset-0 h-full w-full opacity-15" viewBox="0 0 280 120" fill="none">
-              <circle cx="140" cy="60" r="40" stroke="white" strokeWidth="1" />
-              <circle cx="140" cy="60" r="3" fill="white" />
-              <rect x="8" y="8" width="264" height="104" rx="4" stroke="white" strokeWidth="1" />
-              <line x1="140" y1="8" x2="140" y2="112" stroke="white" strokeWidth="1" />
-            </svg>
-          </div>
-
-          {/* Avatar */}
-          <div className="relative flex justify-center">
-            <div className="-mt-8 flex h-16 w-16 items-center justify-center rounded-full border-4 border-white bg-[#22C55E] text-2xl font-black text-white shadow-sm">
-              {initials}
+      {/* ── Profile card ── */}
+      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-xs">
+        {/* Banner with avatar */}
+        <div className="relative h-24 bg-gradient-to-r from-[#0A1A0D] to-[#16421E] px-6">
+          <div className="absolute -bottom-6 flex items-end gap-4">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl border-2 border-white bg-[#16A34A] text-xl font-black text-white shadow-md">
+              {profile.fullName.slice(0, 1).toUpperCase()}
             </div>
-          </div>
-
-          {/* Info */}
-          <div className="px-5 pb-5 pt-2 text-center">
-            <p className="text-base font-black text-gray-900">{profile.fullName}</p>
-            <p className="mt-0.5 text-xs text-gray-500">{profile.email}</p>
-
-            <div className="mt-3 flex justify-center">
-              <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-bold ${
-                isAdmin
-                  ? "border-purple-200 bg-purple-50 text-purple-700"
-                  : "border-[#22C55E]/30 bg-[#22C55E]/10 text-[#15803D]"
-              }`}>
-                {profile.role}
-              </span>
-            </div>
-
-            <div className="mt-4 flex items-center justify-between rounded-xl bg-gray-50 px-3 py-2 text-xs text-gray-500">
-              <span>Trạng thái tài khoản</span>
-              <span className={`flex items-center gap-1 font-semibold ${
-                profile.status === "ACTIVE" ? "text-[#16A34A]" : "text-red-500"
-              }`}>
-                <span className={`h-1.5 w-1.5 rounded-full ${profile.status === "ACTIVE" ? "bg-[#16A34A]" : "bg-red-500"}`} />
-                {profile.status === "ACTIVE" ? "Hoạt động" : "Vô hiệu hoá"}
-              </span>
+            <div className="mb-1">
+              <p className="text-base font-black text-white">{profile.fullName}</p>
+              <p className="text-xs text-emerald-200">{profile.email}</p>
             </div>
           </div>
         </div>
 
-        {/* ─ Right: Info card ─ */}
-        <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-          <div className="mb-4 flex items-start justify-between">
-            <div>
-              <p className="text-base font-bold text-gray-900">Thông tin cơ bản</p>
-              <p className="text-sm text-gray-500">
-                {isEditing
-                  ? "Chỉnh sửa các trường được phép sửa dưới đây."
-                  : "Thông tin hồ sơ hiện tại của bạn."}
-              </p>
-            </div>
-            <div className="flex items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-[10px] font-semibold text-gray-500">
-              <Shield className="h-3 w-3" />
-              Được bảo vệ
-            </div>
-          </div>
-
-          {/* Save error */}
-          {saveError && (
-            <div
-              role="alert"
-              id="profile-save-error"
-              className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600"
-            >
-              {saveError}
-            </div>
-          )}
-
+        <div className="px-6 pb-6 pt-10">
           {isEditing ? (
-            /* ── Edit form ── */
+            /* ── Edit mode ── */
             <div className="space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
                 <EditableField
                   icon={<UserIcon className="h-4 w-4" />}
-                  label="Họ và tên" name="fullName"
-                  value={editFullName} onChange={handleEditChange}
-                  placeholder="Nhập họ và tên" error={editErrors.fullName} disabled={isSaving}
+                  label="Họ và tên"
+                  name="fullName"
+                  value={editFullName}
+                  onChange={handleEditChange}
+                  error={editErrors.fullName}
+                  disabled={isSaving}
                 />
                 <EditableField
                   icon={<Phone className="h-4 w-4" />}
-                  label="Số điện thoại" name="phone"
-                  value={editPhone} onChange={handleEditChange}
-                  placeholder="Nhập số điện thoại (tuỳ chọn)" error={editErrors.phone} disabled={isSaving}
+                  label="Số điện thoại"
+                  name="phone"
+                  value={editPhone}
+                  placeholder="0912 345 678"
+                  onChange={handleEditChange}
+                  error={editErrors.phone}
+                  disabled={isSaving}
                 />
-              </div>
-
-              {/* Read-only fields in edit mode */}
-              <div className="grid gap-3 sm:grid-cols-2">
                 <ReadOnlyField icon={<Mail className="h-4 w-4" />} label="Email" value={profile.email} />
                 <ReadOnlyField icon={<Shield className="h-4 w-4" />} label="Vai trò" value={profile.role} />
                 <ReadOnlyField icon={<Activity className="h-4 w-4" />} label="Trạng thái" value={profile.status === "ACTIVE" ? "Hoạt động" : "Vô hiệu hoá"} />
@@ -389,7 +430,70 @@ export function ProfilePage() {
         </div>
       </div>
 
-      {/* Logout */}
+      {/* ── Security & Sessions Section ── */}
+      <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-6 shadow-xs">
+        <div className="flex items-center gap-2 pb-4 border-b border-gray-100">
+          <ShieldCheck className="h-5 w-5 text-emerald-600" />
+          <h2 className="text-base font-bold text-gray-900">Bảo mật & Quản lý phiên</h2>
+        </div>
+
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          {/* Change password item */}
+          <div className="rounded-xl border border-gray-100 bg-gray-50/70 p-4 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center gap-2 text-sm font-bold text-gray-900">
+                <KeyRound className="h-4 w-4 text-[#16A34A]" />
+                Mật khẩu đăng nhập
+              </div>
+              <p className="mt-1 text-xs text-gray-500 leading-relaxed">
+                Đổi mật khẩu định kỳ giúp bảo vệ tài khoản khỏi các truy cập trái phép.
+              </p>
+            </div>
+            <div className="mt-4">
+              <button
+                type="button"
+                id="profile-change-pw-btn"
+                onClick={openPasswordModal}
+                className="flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-800 hover:bg-emerald-100 transition-colors"
+              >
+                <KeyRound className="h-3.5 w-3.5 text-emerald-600" />
+                Đổi mật khẩu
+              </button>
+            </div>
+          </div>
+
+          {/* Logout all devices item */}
+          <div className="rounded-xl border border-gray-100 bg-gray-50/70 p-4 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center gap-2 text-sm font-bold text-gray-900">
+                <LogOut className="h-4 w-4 text-amber-600" />
+                Phiên làm việc trên mọi thiết bị
+              </div>
+              <p className="mt-1 text-xs text-gray-500 leading-relaxed">
+                Thu hồi toàn bộ Refresh Token của tài khoản và đăng xuất khỏi các trình duyệt khác.
+              </p>
+            </div>
+            <div className="mt-4">
+              <button
+                type="button"
+                id="profile-logout-all-btn"
+                onClick={handleLogoutAll}
+                disabled={isLoggingOutAll}
+                className="flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800 hover:bg-amber-100 disabled:opacity-60 transition-colors"
+              >
+                {isLoggingOutAll ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-600" />
+                ) : (
+                  <LogOut className="h-3.5 w-3.5 text-amber-600" />
+                )}
+                Đăng xuất khỏi mọi thiết bị
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Logout current session */}
       <div className="mt-6 flex justify-end">
         <button
           id="profile-logout-btn"
@@ -397,9 +501,151 @@ export function ProfilePage() {
           className="flex items-center gap-2 text-sm text-gray-400 hover:text-gray-700 transition-colors"
         >
           <X className="h-4 w-4" />
-          Đăng xuất
+          Đăng xuất phiên hiện tại
         </button>
       </div>
+
+      {/* ── Change Password Modal ── */}
+      {showPasswordModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-6 shadow-xl animate-in fade-in">
+            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <KeyRound className="h-5 w-5 text-emerald-600" />
+                <h3 className="text-base font-bold text-gray-900">Đổi mật khẩu tài khoản</h3>
+              </div>
+              <button
+                type="button"
+                onClick={closePasswordModal}
+                disabled={isChangingPassword}
+                className="rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {passwordSuccess ? (
+              <div role="status" className="my-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-xs text-emerald-800 flex items-start gap-2.5">
+                <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
+                <span>{passwordSuccess}</span>
+              </div>
+            ) : (
+              <form onSubmit={handleChangePasswordSubmit} className="mt-4 space-y-4">
+                {passwordApiError && (
+                  <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-600 flex items-start gap-2">
+                    <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                    <span>{passwordApiError}</span>
+                  </div>
+                )}
+
+                {/* Current Password */}
+                <div>
+                  <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-500">
+                    Mật khẩu hiện tại <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showCurrentPw ? "text" : "password"}
+                      value={currentPassword}
+                      onChange={(e) => {
+                        setCurrentPassword(e.target.value)
+                        if (passwordErrors.currentPassword) setPasswordErrors((p) => ({ ...p, currentPassword: undefined }))
+                      }}
+                      disabled={isChangingPassword}
+                      placeholder="Nhập mật khẩu hiện tại"
+                      className="block w-full rounded-xl border border-gray-200 bg-gray-50 py-2.5 pl-3.5 pr-10 text-sm text-gray-900 focus:border-[#16A34A] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#16A34A]/20"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowCurrentPw((v) => !v)}
+                      className="absolute inset-y-0 right-3 flex items-center text-gray-400 hover:text-gray-600"
+                    >
+                      {showCurrentPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                  {passwordErrors.currentPassword && (
+                    <p className="mt-1 text-xs text-red-500">{passwordErrors.currentPassword}</p>
+                  )}
+                </div>
+
+                {/* New Password */}
+                <div>
+                  <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-500">
+                    Mật khẩu mới (8-72 ký tự) <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showNewPw ? "text" : "password"}
+                      value={newPassword}
+                      onChange={(e) => {
+                        setNewPassword(e.target.value)
+                        if (passwordErrors.newPassword) setPasswordErrors((p) => ({ ...p, newPassword: undefined }))
+                      }}
+                      disabled={isChangingPassword}
+                      placeholder="Nhập mật khẩu mới"
+                      className="block w-full rounded-xl border border-gray-200 bg-gray-50 py-2.5 pl-3.5 pr-10 text-sm text-gray-900 focus:border-[#16A34A] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#16A34A]/20"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPw((v) => !v)}
+                      className="absolute inset-y-0 right-3 flex items-center text-gray-400 hover:text-gray-600"
+                    >
+                      {showNewPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                  {passwordErrors.newPassword && (
+                    <p className="mt-1 text-xs text-red-500">{passwordErrors.newPassword}</p>
+                  )}
+                </div>
+
+                {/* Confirm New Password */}
+                <div>
+                  <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-500">
+                    Xác nhận mật khẩu mới <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type={showNewPw ? "text" : "password"}
+                    value={confirmPassword}
+                    onChange={(e) => {
+                      setConfirmPassword(e.target.value)
+                      if (passwordErrors.confirmPassword) setPasswordErrors((p) => ({ ...p, confirmPassword: undefined }))
+                    }}
+                    disabled={isChangingPassword}
+                    placeholder="Nhập lại mật khẩu mới"
+                    className="block w-full rounded-xl border border-gray-200 bg-gray-50 py-2.5 px-3.5 text-sm text-gray-900 focus:border-[#16A34A] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#16A34A]/20"
+                  />
+                  {passwordErrors.confirmPassword && (
+                    <p className="mt-1 text-xs text-red-500">{passwordErrors.confirmPassword}</p>
+                  )}
+                </div>
+
+                {/* Modal actions */}
+                <div className="flex justify-end gap-3 pt-3">
+                  <button
+                    type="button"
+                    onClick={closePasswordModal}
+                    disabled={isChangingPassword}
+                    className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                  >
+                    Hủy
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isChangingPassword}
+                    className="flex items-center gap-1.5 rounded-xl bg-[#B4FF00] px-5 py-2.5 text-xs font-bold text-gray-900 hover:bg-[#AAEF00] disabled:opacity-60"
+                  >
+                    {isChangingPassword ? (
+                      <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Đang cập nhật…</>
+                    ) : (
+                      "Cập nhật mật khẩu"
+                    )}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </section>
   )
 }

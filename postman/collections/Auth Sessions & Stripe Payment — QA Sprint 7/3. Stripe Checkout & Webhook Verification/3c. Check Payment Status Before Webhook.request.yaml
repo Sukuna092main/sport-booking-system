@@ -1,0 +1,17 @@
+$kind: http-request
+name: 3c. Check Payment Status Before Webhook
+url: "{{baseUrl}}/bookings/{{bookingId}}/payments"
+method: GET
+auth:
+  type: bearer
+  credentials:
+    token: "{{userToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('3c: Get payment status returns 200', () => pm.response.to.have.status(200));
+      const res = pm.response.json();
+      pm.test('3c: Booking is PENDING_PAYMENT', () => pm.expect(res.data.bookingStatus).to.eql('PENDING_PAYMENT'));
+      pm.test('3c: Latest payment is PENDING', () => pm.expect(res.data.payment.status).to.eql('PENDING'));
+    language: text/javascript
+order: 3000

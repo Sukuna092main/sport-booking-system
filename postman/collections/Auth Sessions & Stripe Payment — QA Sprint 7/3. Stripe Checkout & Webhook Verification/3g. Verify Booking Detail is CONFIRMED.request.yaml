@@ -1,0 +1,16 @@
+$kind: http-request
+name: 3g. Verify Booking Detail is CONFIRMED
+url: "{{baseUrl}}/bookings/{{bookingId}}"
+method: GET
+auth:
+  type: bearer
+  credentials:
+    token: "{{userToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('3g: Booking detail returns 200', () => pm.response.to.have.status(200));
+      const res = pm.response.json();
+      pm.test('3g: Booking status is CONFIRMED', () => pm.expect(res.data.status).to.eql('CONFIRMED'));
+    language: text/javascript
+order: 7000

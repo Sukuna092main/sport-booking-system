@@ -1,0 +1,15 @@
+$kind: http-request
+name: Role / USER bị chặn khỏi admin
+url: "{{baseUrl}}/admin/courts"
+method: GET
+auth:
+  type: bearer
+  credentials:
+    token: "{{userToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('USER goi admin phai 403', () => pm.response.to.have.status(403));
+      pm.test('error.code = forbidden', () => pm.expect(pm.response.json().error.code).to.eql('forbidden'));
+    language: text/javascript
+order: 1000

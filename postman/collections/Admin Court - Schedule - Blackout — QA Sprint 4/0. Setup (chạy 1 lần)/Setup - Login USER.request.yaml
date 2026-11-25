@@ -1,0 +1,25 @@
+$kind: http-request
+name: Setup / Login USER
+url: "{{baseUrl}}/auth/login"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "email": "{{userEmail}}",
+      "password": "{{userPassword}}"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Dang nhap 200', () => pm.response.to.have.status(200));
+      const b = pm.response.json();
+      pm.test('Co accessToken va role USER', () => {
+        pm.expect(b.data.accessToken).to.be.a('string').and.not.empty;
+        pm.expect(b.data.user.role).to.eql('USER');
+      });
+      pm.collectionVariables.set('userToken', b.data.accessToken);
+    language: text/javascript
+order: 2000

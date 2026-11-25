@@ -48,6 +48,51 @@ export interface LoginResponse {
   data: LoginData
 }
 
+/** POST /auth/forgot-password — request body */
+export interface ForgotPasswordRequest {
+  email: string
+}
+
+/** POST /auth/forgot-password — response */
+export interface ForgotPasswordResponse {
+  data: {
+    message: string
+  }
+}
+
+/** POST /auth/reset-password — request body */
+export interface ResetPasswordRequest {
+  token: string
+  newPassword: string
+}
+
+/** POST /auth/reset-password — response */
+export interface ResetPasswordResponse {
+  data: {
+    message: string
+  }
+}
+
+/** POST /auth/change-password — request body */
+export interface ChangePasswordRequest {
+  currentPassword: string
+  newPassword: string
+}
+
+/** POST /auth/change-password — response */
+export interface ChangePasswordResponse {
+  data: {
+    message: string
+  }
+}
+
+/** Generic auth message response */
+export interface AuthMessageResponse {
+  data: {
+    message: string
+  }
+}
+
 /** API error envelope */
 export interface ApiErrorDetail {
   field: string

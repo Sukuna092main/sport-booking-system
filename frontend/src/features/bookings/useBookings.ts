@@ -82,7 +82,11 @@ export function useMyBookings(params?: {
       try {
         const response = await bookingsApi.listMyBookings(params)
         return response
-      } catch {
+      } catch (err: unknown) {
+        const status = (err as { response?: { status?: number } })?.response?.status
+        if (status === 401 || status === 403) {
+          throw err
+        }
         // Fallback to local session storage bookings before BE handoff
         const local = getMockBookings()
         const filtered = params?.status
@@ -112,12 +116,16 @@ export function useMyBooking(bookingId: string) {
       try {
         const response = await bookingsApi.getMyBooking(bookingId)
         return response.data
-      } catch {
+      } catch (err: unknown) {
+        const status = (err as { response?: { status?: number } })?.response?.status
+        if (status === 401 || status === 403) {
+          throw err
+        }
         // Fallback to local session storage
         const local = getMockBookings()
         const found = local.find((b) => b.id === bookingId)
         if (found) return found
-        throw new Error("Không tìm thấy thông tin đặt sân.")
+        throw new Error("Không tìm thấy thông tin đặt sân.", { cause: err })
       }
     },
     enabled: !!bookingId,
@@ -143,6 +151,8 @@ export function useCreateBooking() {
     onSuccess: (response) => {
       // Invalidate queries so lists update
       queryClient.invalidateQueries({ queryKey: bookingsQueryKeys.all })
+      // Invalidate court availability so newly booked slots reflect as unavailable
+      queryClient.invalidateQueries({ queryKey: ["courts", "availability"] })
       // Also cache in local session for offline/mock resilience
       if (response?.data) {
         saveMockBooking(response.data)
@@ -153,6 +163,7 @@ export function useCreateBooking() {
 
 /**
  * useCancelMyBooking — mutation to call POST /bookings/{id}/cancel
+ * On success, refreshes bookings and court availability caches.
  */
 export function useCancelMyBooking() {
   const queryClient = useQueryClient()
@@ -162,16 +173,37 @@ export function useCancelMyBooking() {
       try {
         const res = await bookingsApi.cancelMyBooking(bookingId)
         return res.data
-      } catch (err) {
-        // Fallback for mock if BE endpoint is not ready
+      } catch (err: unknown) {
+        const axiosErr = err as {
+          response?: {
+            status?: number
+            data?: {
+              error?: {
+                code?: string
+              }
+            }
+          }
+        }
+        const status = axiosErr?.response?.status
+        const code = axiosErr?.response?.data?.error?.code
+
+        // Do NOT swallow business rule violations (cancellation_closed, already_cancelled, 401/403)
+        if (code === "cancellation_closed" || code === "already_cancelled" || status === 401 || status === 403) {
+          throw err
+        }
+
+        // Fallback for mock if BE endpoint is not ready (404/501)
         const updated = updateMockBookingStatus(bookingId, "CANCELLED")
         if (updated) return updated
         throw err
       }
     },
     onSuccess: (cancelled) => {
+      // Refresh My Bookings list and details
       queryClient.invalidateQueries({ queryKey: bookingsQueryKeys.all })
       queryClient.setQueryData(bookingsQueryKeys.detail(cancelled.id), cancelled)
+      // Refresh court availability so freed slots show as available immediately
+      queryClient.invalidateQueries({ queryKey: ["courts", "availability"] })
     },
   })
 }

@@ -1,0 +1,25 @@
+$kind: http-request
+name: Schedule / PUT sai format giờ
+url: "{{baseUrl}}/admin/courts/{{courtId}}/operating-hours"
+method: PUT
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "hours": [
+        { "weekday": 1, "opensAt": "8:00", "closesAt": "22:00:00" }
+      ]
+    }
+auth:
+  type: bearer
+  credentials:
+    token: "{{adminToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Gio sai format phai 400', () => pm.response.to.have.status(400));
+      pm.test('error.code = validation_error', () => pm.expect(pm.response.json().error.code).to.eql('validation_error'));
+    language: text/javascript
+order: 2000

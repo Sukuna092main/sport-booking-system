@@ -1,0 +1,10 @@
+$kind: http-request
+name: 1g. Refresh After Logout Fails
+url: "{{baseUrl}}/auth/refresh"
+method: POST
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('1g: Refresh after logout returns 401', () => pm.response.to.have.status(401));
+    language: text/javascript
+order: 7000

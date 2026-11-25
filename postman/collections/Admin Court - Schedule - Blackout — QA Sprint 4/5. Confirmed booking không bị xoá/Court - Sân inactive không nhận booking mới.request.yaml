@@ -1,0 +1,27 @@
+$kind: http-request
+name: Court / Sân inactive không nhận booking mới
+url: "{{baseUrl}}/bookings"
+method: POST
+headers:
+  Content-Type: application/json
+  Idempotency-Key: qa-s4-{{runId}}-inactive
+body:
+  type: json
+  content: |-
+    {
+      "courtId": "{{courtId}}",
+      "bookingDate": "{{date1}}",
+      "timeSlotIds": ["{{slotId}}"]
+    }
+auth:
+  type: bearer
+  credentials:
+    token: "{{userToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('San inactive phai tu choi booking moi', () => {
+        pm.expect([409, 422]).to.include(pm.response.code);
+      });
+    language: text/javascript
+order: 4000

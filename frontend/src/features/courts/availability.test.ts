@@ -244,4 +244,3 @@ describe("Checklist: Payload dung contract (CreateBookingRequest)", () => {
     expect(payload.timeSlotIds).toEqual(["slot-1", "slot-2", "slot-3"])
   })
 })
-

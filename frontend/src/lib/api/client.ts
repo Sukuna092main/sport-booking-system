@@ -1,6 +1,6 @@
-import axios, { type AxiosError } from "axios"
+import axios, { type AxiosError, type InternalAxiosRequestConfig } from "axios"
 import { tokenStorage } from "@/lib/auth/token"
-import type { ApiErrorResponse } from "@/types/auth.types"
+import type { ApiErrorResponse, LoginResponse } from "@/types/auth.types"
 
 const baseURL = import.meta.env.VITE_API_BASE_URL
 
@@ -10,6 +10,7 @@ if (!baseURL) {
 
 export const apiClient = axios.create({
   baseURL,
+  withCredentials: true,
   headers: {
     "Content-Type": "application/json",
   },
@@ -24,24 +25,106 @@ apiClient.interceptors.request.use((config) => {
   return config
 })
 
+// Concurrency mutex / queue for token refresh
+let isRefreshing = false
+let failedQueue: Array<{
+  resolve: (token: string) => void
+  reject: (error: unknown) => void
+}> = []
+
+const processQueue = (error: unknown, token: string | null = null) => {
+  failedQueue.forEach((prom) => {
+    if (error) {
+      prom.reject(error)
+    } else if (token) {
+      prom.resolve(token)
+    }
+  })
+  failedQueue = []
+}
+
 /**
  * Response interceptor:
- * - 401: clear token storage AND dispatch a custom event so AuthContext
- *   can reset its in-memory state. This covers the case where a token
- *   expires after the initial mount (e.g., during a protected API call).
- *   Per doc section 7.1: "401 từ protected API đưa ứng dụng về trạng thái
- *   chưa xác thực theo policy đã review."
- * - 403: pass through; doc says 403 means authenticated but forbidden,
- *   must NOT silently convert to 401.
+ * - 401 on protected requests: Attempt to refresh accessToken via POST /auth/refresh
+ *   using HttpOnly cookie sb_refresh_token (withCredentials: true).
+ *   If refresh succeeds, replay original request and queued requests with new token.
+ *   If refresh fails, clear tokenStorage and dispatch auth:unauthorized.
+ * - 403: pass through (authenticated but forbidden).
  */
 apiClient.interceptors.response.use(
   (response) => response,
-  (error: AxiosError<ApiErrorResponse>) => {
-    if (error.response?.status === 401) {
-      tokenStorage.clear()
-      // Notify AuthContext to reset in-memory user/token state
-      window.dispatchEvent(new CustomEvent("auth:unauthorized"))
+  async (error: AxiosError<ApiErrorResponse>) => {
+    const originalRequest = error.config as (InternalAxiosRequestConfig & { _retry?: boolean }) | undefined
+
+    if (!originalRequest) {
+      return Promise.reject(error)
     }
-    return Promise.reject(error)
+
+    const url = originalRequest.url ?? ""
+    const isAuthRoute =
+      url.includes("/auth/login") ||
+      url.includes("/auth/refresh") ||
+      url.includes("/auth/register") ||
+      url.includes("/auth/forgot-password") ||
+      url.includes("/auth/reset-password")
+
+    // If not a 401, or already retried, or is an unauthenticated auth route: pass through error
+    if (error.response?.status !== 401 || originalRequest._retry || isAuthRoute) {
+      if (error.response?.status === 401 && !isAuthRoute) {
+        tokenStorage.clear()
+        window.dispatchEvent(new CustomEvent("auth:unauthorized"))
+      }
+      return Promise.reject(error)
+    }
+
+    // If a refresh is already in progress, enqueue this request
+    if (isRefreshing) {
+      return new Promise<string>((resolve, reject) => {
+        failedQueue.push({ resolve, reject })
+      })
+        .then((token) => {
+          originalRequest.headers.Authorization = `Bearer ${token}`
+          return apiClient(originalRequest)
+        })
+        .catch((err) => Promise.reject(err))
+    }
+
+    originalRequest._retry = true
+    isRefreshing = true
+
+    try {
+      // Call refresh endpoint with withCredentials: true to send sb_refresh_token cookie
+      const res = await axios.post<LoginResponse>(
+        `${baseURL}/auth/refresh`,
+        {},
+        {
+          withCredentials: true,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      )
+
+      const newAccessToken = res.data.data.accessToken
+      tokenStorage.set(newAccessToken, res.data.data.expiresAt)
+
+      // Notify AuthContext about the refreshed token and user
+      window.dispatchEvent(
+        new CustomEvent("auth:token-refreshed", {
+          detail: res.data.data,
+        }),
+      )
+
+      processQueue(null, newAccessToken)
+      originalRequest.headers.Authorization = `Bearer ${newAccessToken}`
+      return apiClient(originalRequest)
+    } catch (refreshErr) {
+      processQueue(refreshErr, null)
+      tokenStorage.clear()
+      window.dispatchEvent(new CustomEvent("auth:unauthorized"))
+      return Promise.reject(refreshErr)
+    } finally {
+      isRefreshing = false
+    }
   },
 )

@@ -1,0 +1,19 @@
+$kind: http-request
+name: Role / ADMIN xem danh sách
+url: "{{baseUrl}}/admin/courts"
+method: GET
+auth:
+  type: bearer
+  credentials:
+    token: "{{adminToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('ADMIN xem duoc 200', () => pm.response.to.have.status(200));
+      pm.test('Co data va meta', () => {
+        const b = pm.response.json();
+        pm.expect(b.data).to.be.an('array');
+        pm.expect(b.meta).to.have.property('total');
+      });
+    language: text/javascript
+order: 3000

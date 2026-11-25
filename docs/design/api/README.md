@@ -1,12 +1,12 @@
 # REST Contract và Swagger Base
 
-**Phiên bản:** 0.3.0 · **Nguồn chuẩn:** [OpenAPI 3.0.3](../../../backend/internal/platform/openapi/openapi.yaml). Huy đã giao tự chốt triển khai 6 task backend; FE đối chiếu contract trước tích hợp.
+**Phiên bản:** 0.5.0 · **Nguồn chuẩn:** [OpenAPI 3.0.3](../../../backend/internal/platform/openapi/openapi.yaml). Huy giao triển khai BE đến My Booking/Detail/Cancel; FE đối chiếu contract trước tích hợp.
 
 ## Cách mở
 
 Chạy backend theo [hướng dẫn](../../../backend/README.md), rồi mở `http://localhost:8080/api/v1/docs`. File thô ở `http://localhost:8080/api/v1/openapi.yaml`. Trang Swagger dùng `swagger-ui-dist@5.11.0` từ unpkg; trình duyệt cần truy cập CDN để tải giao diện, còn file OpenAPI được server phục vụ cục bộ.
 
-**Đã triển khai:** Ping, Register/Login, Profile GET/PATCH, Sport Types, Court Browse/Search/Detail và Availability. Mỗi operation có `x-implementation-status`; Booking và Admin CRUD vẫn là `planned`. Xem [cách chạy và ví dụ](../../../backend/README.md), [kết quả kiểm thử/review](../../testing/BACKEND_SIX_TASKS_REVIEW.md).
+**Đã triển khai:** Ping, Register/Login, Profile GET/PATCH, Sport Types, Court Browse/Search/Detail, Availability và Booking Create/History/Detail/Cancel. Mỗi operation có `x-implementation-status`; Admin CRUD, lịch/slot, blackout, tra cứu/hủy booking và thống kê đã triển khai. Xem [cách chạy](../../../backend/README.md), [quy tắc và ví dụ Booking](../../../backend/internal/Booking/README.md), [kết quả kiểm thử Booking](../../testing/BOOKING_API_REVIEW.md).
 
 ## Quy ước chung
 
@@ -18,11 +18,11 @@ Chạy backend theo [hướng dẫn](../../../backend/README.md), rồi mở `ht
 | Auth | `Authorization: Bearer <JWT>` cho route bảo vệ; claim `sub` là UUID người dùng, `role` là `USER`/`ADMIN`, có `iat`/`exp`. Route `/admin/*` đòi ADMIN. Không trả token trong log. |
 | Ngày giờ | `bookingDate` và query `date` là `YYYY-MM-DD` theo `APP_TIMEZONE` của địa điểm; mẫu giờ là `HH:mm:ss` địa phương; timestamp trả UTC RFC 3339. Thứ dùng ISO 1–7. |
 | Danh sách | `page` từ 1 (mặc định 1), `pageSize` từ 1–100 (mặc định 20). |
-| Đặt sân | `Idempotency-Key` bắt buộc, opaque, 1–128 ký tự, phạm vi theo người dùng. Cùng khóa+nội dung trả booking gốc (`200`); khác nội dung trả `409 idempotency_conflict`. Tạo mới trả `201`. |
+| Đặt sân | Một header `Idempotency-Key` bắt buộc, opaque, 1–128 ký tự, không có ký tự điều khiển, phạm vi theo người dùng. Giữ khóa suốt vòng đời booking. Hash tính theo courtId/ngày/tập slot chuẩn hóa UUID chữ thường; đổi JSON layout/thứ tự array khi retry không đổi thao tác. Lần tạo mới yêu cầu thứ tự thời gian. Cùng khóa+nội dung trả booking gốc (`200`), kể cả đã hủy/quá horizon; khác nội dung trả `409 idempotency_conflict`. Tạo mới trả `201`. |
 | Giá | `referencePriceAmount` là decimal string; chỉ hiển thị, không có thanh toán MVP. |
 | DELETE | Chỉ dành cho ADMIN ngừng kích hoạt sport type, court và blackout (`isActive=false`); trả `204` không có body, gọi lại vẫn `204`. Không xóa vật lý dữ liệu đã tham chiếu. Booking dùng thao tác hủy, giữ lịch sử và audit. |
 
-Mã lỗi ổn định cho FE: `validation_error` (400), `unauthorized`/`invalid_credentials` (401), `forbidden`/`account_inactive` (403), `not_found` (404), `method_not_allowed` (405), `email_taken`/`slot_unavailable`/`idempotency_conflict`/`already_cancelled`/`cancellation_closed`/`resource_has_active_children` (409), `booking_rule_violation` (422), `internal_error` (500), `service_unavailable` (503). Thông báo hiển thị có thể đổi theo ngữ cảnh; FE dựa vào `code`. Với booking không thuộc người dùng, API trả 404 như booking không tồn tại.
+Mã lỗi ổn định cho FE: `validation_error` (400), `unauthorized`/`invalid_credentials` (401), `forbidden`/`account_inactive` (403), `not_found` (404), `method_not_allowed` (405), `email_taken`/`slot_unavailable`/`idempotency_conflict`/`already_cancelled`/`cancellation_closed`/`resource_has_active_children` (409), `booking_rule_violation` (422), `internal_error` (500), `service_unavailable`/`retryable_transaction` (503). Thông báo hiển thị có thể đổi theo ngữ cảnh; FE dựa vào `code`. Với booking không thuộc người dùng, API trả 404 như booking không tồn tại. Khi mất response hoặc chưa rõ kết quả Commit, retry Create giữ nguyên key/nội dung.
 
 Các vi phạm như quá 30 ngày, slot quá khứ, vượt giới hạn ba booking còn hiệu lực, slot không liên tiếp hoặc quá min/max của sân trả `422 booking_rule_violation` với `details`. Slot đã được đặt hoặc bị lịch chặn trả `409 slot_unavailable`. Hủy sau giờ bắt đầu slot đầu tiên trả `409 cancellation_closed`.
 
@@ -48,7 +48,7 @@ Các vi phạm như quá 30 ngày, slot quá khứ, vượt giới hạn ba book
 | FR-18: thống kê | `/admin/statistics` GET. |
 | FR-19: audit | Service ghi `audit_logs` khi thay đổi quản trị và booking; SRS chưa yêu cầu endpoint đọc audit. |
 
-Bảng trên mô tả phạm vi thiết kế MVP. FR-01–FR-06 đã có API thuộc 6 task này; FR-07–FR-19 được triển khai theo các task Booking/Admin tiếp theo. Foundation đã có schema, fixture và exclusion rules; chưa có Admin CRUD.
+Bảng trên mô tả phạm vi thiết kế MVP. FR-01–FR-06 và luồng Booking FR-08–FR-14 đã triển khai. FR-19 đã có audit tạo/hủy booking trong transaction. FR-07 và FR-15–FR-18 cùng audit của Admin đã triển khai trong backend.
 
 ## Nguồn và các điểm cần duyệt
 
@@ -57,4 +57,4 @@ Bảng trên mô tả phạm vi thiết kế MVP. FR-01–FR-06 đã có API thu
 - [Thẻ kiến trúc](https://trello.com/c/0VhI2oe1): Go/Gin, REST `/api/v1`, JWT+bcrypt, USER/ADMIN.
 - [Task API](https://trello.com/c/ol2X6l9v): contract và Swagger phải qua review trước tích hợp FE.
 
-Các API đã triển khai giữ DTO đã chốt: access token, ACTIVE/INACTIVE, profile self-only, date theo APP_TIMEZONE. Duy đối chiếu trước tích hợp FE. Các quy tắc Booking/Admin còn planned được review trong task tương ứng; khi đổi contract phải tăng version và đồng bộ FE/backend.
+Các API đã triển khai giữ DTO đã chốt: access token, ACTIVE/INACTIVE, profile self-only, date theo APP_TIMEZONE. Huy đã giao tự chốt các quy tắc Booking trong task này; Duy đối chiếu contract v0.5.0 trước tích hợp FE. Các thay đổi Admin được đối chiếu kế hoạch BE Chương 13–14; khi đổi contract phải tăng version và đồng bộ FE/backend.

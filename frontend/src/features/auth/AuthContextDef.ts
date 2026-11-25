@@ -13,8 +13,10 @@ export interface AuthContextValue {
   isLoading: boolean
   /** Called after successful login — persists token + user */
   login(token: string, expiresAt: string, user: User): void
-  /** Clears token + user; per contract logout only clears client-side */
+  /** Revokes current session and clears client state */
   logout(): void
+  /** Revokes all sessions on all devices and clears client state */
+  logoutAll(): Promise<void>
 }
 
 export const AuthContext = createContext<AuthContextValue | null>(null)

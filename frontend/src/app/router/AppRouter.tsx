@@ -1,4 +1,4 @@
-import { BrowserRouter, Route, Routes } from "react-router-dom"
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom"
 import { AuthProvider } from "@/features/auth/AuthContext"
 import { AppLayout } from "@/components/layout/AppLayout"
 import { BookingsPage } from "@/app/pages/BookingsPage"
@@ -9,9 +9,20 @@ import { CourtAvailabilityPage } from "@/app/pages/CourtAvailabilityPage"
 import { BookingReviewPage } from "@/app/pages/BookingReviewPage"
 import { HomePage } from "@/app/pages/HomePage"
 import { LoginPage } from "@/app/pages/LoginPage"
+import { ForgotPasswordPage } from "@/app/pages/ForgotPasswordPage"
+import { ResetPasswordPage } from "@/app/pages/ResetPasswordPage"
+import { MockPaymentPage } from "@/app/pages/MockPaymentPage"
+import { PaymentResultPage } from "@/app/pages/PaymentResultPage"
 import { ProfilePage } from "@/app/pages/ProfilePage"
 import { RegisterPage } from "@/app/pages/RegisterPage"
 import { ForbiddenPage } from "@/app/pages/ForbiddenPage"
+import { AdminLayout } from "@/features/admin/AdminLayout"
+import { AdminCourtsPage } from "@/app/pages/AdminCourtsPage"
+import { AdminSportTypesPage } from "@/app/pages/AdminSportTypesPage"
+import { AdminSchedulePage } from "@/app/pages/AdminSchedulePage"
+import { AdminBlackoutsPage } from "@/app/pages/AdminBlackoutsPage"
+import { AdminBookingsPage } from "@/app/pages/AdminBookingsPage"
+import { AdminBookingDetailPage } from "@/app/pages/AdminBookingDetailPage"
 import { ProtectedRoute } from "./ProtectedRoute"
 
 export function AppRouter() {
@@ -25,6 +36,10 @@ export function AppRouter() {
             <Route path="/" element={<HomePage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
+            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
+            <Route path="/mock-payment" element={<MockPaymentPage />} />
+            <Route path="/payment-result" element={<PaymentResultPage />} />
             <Route path="/forbidden" element={<ForbiddenPage />} />
 
             {/* Courts — public browse/search/detail/availability */}
@@ -44,7 +59,15 @@ export function AppRouter() {
 
             {/* ADMIN-only routes */}
             <Route element={<ProtectedRoute requiredRole="ADMIN" />}>
-              {/* Future admin pages go here */}
+              <Route path="/admin" element={<AdminLayout />}>
+                <Route index element={<Navigate to="/admin/courts" replace />} />
+                <Route path="courts" element={<AdminCourtsPage />} />
+                <Route path="schedule" element={<AdminSchedulePage />} />
+                <Route path="blackouts" element={<AdminBlackoutsPage />} />
+                <Route path="bookings" element={<AdminBookingsPage />} />
+                <Route path="bookings/:bookingId" element={<AdminBookingDetailPage />} />
+                <Route path="sport-types" element={<AdminSportTypesPage />} />
+              </Route>
             </Route>
           </Route>
         </Routes>

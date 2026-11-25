@@ -1,0 +1,17 @@
+$kind: http-request
+name: 3f. Verify Payment Status is PAID
+url: "{{baseUrl}}/bookings/{{bookingId}}/payments"
+method: GET
+auth:
+  type: bearer
+  credentials:
+    token: "{{userToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('3f: Get payment status returns 200', () => pm.response.to.have.status(200));
+      const res = pm.response.json();
+      pm.test('3f: Booking status is CONFIRMED', () => pm.expect(res.data.bookingStatus).to.eql('CONFIRMED'));
+      pm.test('3f: Payment status is PAID', () => pm.expect(res.data.payment.status).to.eql('PAID'));
+    language: text/javascript
+order: 6000

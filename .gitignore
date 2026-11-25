@@ -28,3 +28,10 @@ Thumbs.db
 # Runtime evidence/dumps: keep only the directory guide
 /artifacts/*
 !/artifacts/README.md
+
+# AI agents and related files
+.workbuddy-ai
+
+# Local scratch artifacts
+/logs/
+/output/

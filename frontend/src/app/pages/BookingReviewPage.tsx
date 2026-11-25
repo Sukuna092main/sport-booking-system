@@ -1,5 +1,5 @@
-import { useState } from "react"
-import { useNavigate } from "react-router-dom"
+import { useEffect, useState } from "react"
+import { Link, useNavigate } from "react-router-dom"
 import {
   ArrowLeft,
   ArrowRight,
@@ -7,20 +7,18 @@ import {
   AlertTriangle,
   Loader2,
   ShieldCheck,
-  RefreshCw,
-  Copy,
-  Info,
   CalendarDays,
   Clock,
   Tag,
   MapPin,
   AlertCircle,
-  KeyRound,
+  Calendar,
+  CreditCard,
+  MailCheck,
 } from "lucide-react"
 import type {
   BookingItem,
   BookingReviewHandoffData,
-  SubmissionMode,
 } from "@/features/bookings/types"
 import {
   formatReferencePrice,
@@ -29,50 +27,15 @@ import {
 import { useCourtById } from "@/features/courts/useCourts"
 import { bookingsApi, generateIdempotencyKey } from "@/lib/api/bookings"
 import { saveMockBooking } from "@/features/bookings/useBookings"
+import { paymentsApi } from "@/lib/api/payments"
 import { AxiosError } from "axios"
 import type { ApiErrorResponse } from "@/types/auth.types"
-
-function makeRequestId(prefix: string): string {
-  return `${prefix}-${Math.random().toString(36).substring(2, 10)}`
-}
-
-
-const DEFAULT_REVIEW_DATA: BookingReviewHandoffData = {
-  courtId: "c1111111-2222-3333-4444-555555555555",
-  courtName: "Court A",
-  courtCode: "CRT-A",
-  sportName: "BADMINTON",
-  sportTypeId: "st-badminton",
-  locationText: "Riverside Sports Center · 12 Riverwalk Avenue",
-  bookingDate: "2026-10-15",
-  formattedDate: "Thứ Năm, 15/10/2026",
-  slotDurationMinutes: 60,
-  minConsecutiveSlots: 1,
-  maxConsecutiveSlots: 4,
-  referencePriceAmount: "150000",
-  referencePriceCurrency: "VND",
-  timeRangeText: "14:00 – 15:00",
-  durationText: "1 hour",
-  selectedSlots: [
-    {
-      id: "slot-demo-1",
-      startsAt: "2026-10-15T07:00:00.000Z",
-      endsAt: "2026-10-15T08:00:00.000Z",
-      formattedRange: "14:00 - 15:00",
-    },
-  ],
-  payload: {
-    courtId: "c1111111-2222-3333-4444-555555555555",
-    bookingDate: "2026-10-15",
-    timeSlotIds: ["slot-demo-1"],
-  },
-}
 
 export function BookingReviewPage() {
   const navigate = useNavigate()
 
   // 1. Nhận dữ liệu Court/Date/Selected Slots từ Availability UI qua sessionStorage
-  const reviewData: BookingReviewHandoffData = (() => {
+  const reviewData: BookingReviewHandoffData | null = (() => {
     try {
       const stored = sessionStorage.getItem("pending_booking_review")
       if (stored) {
@@ -81,47 +44,33 @@ export function BookingReviewPage() {
     } catch {
       // fallback
     }
-    return DEFAULT_REVIEW_DATA
+    return null
   })()
 
   // Fresh court data query to ensure latest constraints and reference price
-  const { data: court } = useCourtById(reviewData.courtId)
+  const { data: court } = useCourtById(reviewData?.courtId ?? "")
 
-  // Merge latest court parameters if available
-  const courtName = court?.name ?? reviewData.courtName
-  const courtCode = court?.code ?? reviewData.courtCode
-  const locationText = court?.description ?? reviewData.locationText
-  const minSlots = court?.minConsecutiveSlots ?? reviewData.minConsecutiveSlots ?? 1
-  const maxSlots = court?.maxConsecutiveSlots ?? reviewData.maxConsecutiveSlots ?? 4
-  const slotDuration = court?.slotDurationMinutes ?? reviewData.slotDurationMinutes ?? 60
-  const priceAmount = court?.referencePriceAmount ?? reviewData.referencePriceAmount
-  const priceCurrency = court?.referencePriceCurrency ?? reviewData.referencePriceCurrency ?? "VND"
+  // Real pricing per slot from backend
+  const [courtPricing, setCourtPricing] = useState<{ pricePerSlotVnd: number } | null>(null)
 
-  const slotCount = reviewData.selectedSlots.length
-
-  // 3. Hiển thị giá tham chiếu và tổng số slot
-  const priceInfo = formatReferencePrice(priceAmount, priceCurrency, slotCount)
-
-  // 4. Validate slot selection trước khi gửi request
-  const validation = validateBookingReview(
-    reviewData.bookingDate,
-    reviewData.selectedSlots,
-    {
-      minConsecutiveSlots: minSlots,
-      maxConsecutiveSlots: maxSlots,
+  useEffect(() => {
+    if (reviewData?.courtId) {
+      paymentsApi
+        .getCourtPricing(reviewData.courtId)
+        .then((res) => {
+          if (res.data?.pricePerSlotVnd) {
+            setCourtPricing(res.data)
+          }
+        })
+        .catch(() => setCourtPricing(null))
     }
-  )
+  }, [reviewData?.courtId])
 
   // Idempotency Key state (opaque, 1-128 chars, unique per attempt / preserved on retry)
-  const [idempotencyKey, setIdempotencyKey] = useState<string>(() => generateIdempotencyKey())
+  const [idempotencyKey] = useState<string>(() => generateIdempotencyKey())
 
-  // Execution mode: Real API or contract simulation for review/testing
-  const [submissionMode, setSubmissionMode] = useState<SubmissionMode>("real_api")
-
-  // 6. Disable submit trong lúc request để tránh double submit
+  // Submit states
   const [isSubmitting, setIsSubmitting] = useState(false)
-
-  // Submit result state
   const [submitResult, setSubmitResult] = useState<{
     status: "idle" | "success" | "conflict" | "error"
     booking?: BookingItem
@@ -135,266 +84,192 @@ export function BookingReviewPage() {
     }
   }>({ status: "idle" })
 
-  const [copiedPayload, setCopiedPayload] = useState(false)
-  const [copiedKey, setCopiedKey] = useState(false)
-  const [copiedSuccessCode, setCopiedSuccessCode] = useState(false)
+  // If no review data exists in session storage, guide user to select court first
+  if (!reviewData) {
+    return (
+      <div className="py-12">
+        <div className="mx-auto max-w-lg rounded-3xl border border-gray-200 bg-white p-8 text-center shadow-xs">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
+            <Calendar className="h-7 w-7" />
+          </div>
+          <h2 className="mt-4 text-xl font-black text-gray-900">
+            Chưa có thông tin đặt sân
+          </h2>
+          <p className="mt-2 text-xs leading-relaxed text-gray-500">
+            Bạn chưa chọn sân hoặc khung giờ nào. Vui lòng khám phá danh sách sân thể thao và chọn khung giờ bạn muốn đặt trước khi xác nhận.
+          </p>
+          <div className="mt-6 flex justify-center">
+            <Link
+              to="/courts"
+              className="flex items-center gap-2 rounded-xl bg-[#B4FF00] px-5 py-3 text-xs font-black text-gray-900 transition-colors hover:bg-[#AAEF00]"
+            >
+              <span>Khám phá danh sách sân ngay</span>
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
-  // 5. Gọi Create Booking API / xử lý submit
+  // Merge latest court parameters if available
+  const courtName = court?.name ?? reviewData.courtName
+  const courtCode = court?.code ?? reviewData.courtCode
+  const locationText = court?.description ?? reviewData.locationText
+  const minSlots = court?.minConsecutiveSlots ?? reviewData.minConsecutiveSlots ?? 1
+  const maxSlots = court?.maxConsecutiveSlots ?? reviewData.maxConsecutiveSlots ?? 4
+  const slotDuration = court?.slotDurationMinutes ?? reviewData.slotDurationMinutes ?? 60
+  const priceAmount = court?.referencePriceAmount ?? reviewData.referencePriceAmount
+  const priceCurrency = court?.referencePriceCurrency ?? reviewData.referencePriceCurrency ?? "VND"
+
+  const slotCount = reviewData.selectedSlots.length
+
+  // Real pricing calculations
+  const pricePerSlot = courtPricing?.pricePerSlotVnd || 0
+  const totalCalculatedVnd = pricePerSlot > 0 ? pricePerSlot * slotCount : 0
+  const depositCalculatedVnd = totalCalculatedVnd > 0 ? Math.floor((totalCalculatedVnd * 3000) / 10000) : 0
+  const remainingCalculatedVnd = totalCalculatedVnd - depositCalculatedVnd
+
+  // Hiển thị giá tham chiếu và tổng số slot
+  const priceInfo = formatReferencePrice(priceAmount, priceCurrency, slotCount)
+
+  // Validate slot selection trước khi gửi request
+  const validation = validateBookingReview(
+    reviewData.bookingDate,
+    reviewData.selectedSlots,
+    {
+      minConsecutiveSlots: minSlots,
+      maxConsecutiveSlots: maxSlots,
+    }
+  )
+
   async function handleConfirmBooking() {
-    if (isSubmitting || !validation.isValid) return
+    if (isSubmitting || !validation.isValid || !reviewData) return
 
     setIsSubmitting(true)
     setSubmitResult({ status: "idle" })
 
-    // A. Real API Submission
-    if (submissionMode === "real_api") {
-      try {
-        const response = await bookingsApi.createBooking(
-          reviewData.payload,
-          idempotencyKey
-        )
-        const createdBooking = response.data
-        saveMockBooking(createdBooking)
-        setIsSubmitting(false)
-        setSubmitResult({
-          status: "success",
-          booking: createdBooking,
-          bookingCode: createdBooking.bookingCode,
-          bookingId: createdBooking.id,
-        })
-      } catch (err: unknown) {
-        setIsSubmitting(false)
-        if (err instanceof AxiosError) {
-          const status = err.response?.status
-          const errData = err.response?.data as ApiErrorResponse | undefined
+    try {
+      const response = await bookingsApi.createBooking(
+        reviewData.payload,
+        idempotencyKey
+      )
+      const createdBooking = response.data
+      saveMockBooking(createdBooking)
+      sessionStorage.removeItem("pending_booking_review")
+      sessionStorage.removeItem("pending_booking_payload")
 
-          // 7. Xử lý booking conflict bằng thông báo rõ ràng (409 Conflict)
-          if (status === 409) {
-            setSubmitResult({
-              status: "conflict",
-              errorEnvelope: {
-                code: errData?.error?.code || "slot_unavailable",
-                message:
-                  errData?.error?.message ||
-                  "Khung giờ bạn chọn đã bị người khác đặt trước hoặc không còn khả dụng.",
-                requestId: errData?.error?.requestId || makeRequestId("req-conflict"),
-                details: errData?.error?.details || [
-                  {
-                    field: "timeSlotIds",
-                    message: "Xung đột lịch đặt: Khung giờ đã bị chiếm trong lúc giao dịch commit.",
-                  },
-                ],
-              },
-            })
+      // If booking requires payment, initiate checkout session
+      if (createdBooking.status === "PENDING_PAYMENT") {
+        sessionStorage.setItem("pending_booking_id", createdBooking.id)
+        try {
+          const payRes = await paymentsApi.startPayment(createdBooking.id)
+          if (payRes.data.checkoutUrl) {
+            const url = payRes.data.checkoutUrl
+            if (url.startsWith("http://") || url.startsWith("https://")) {
+              if (url.includes(window.location.host)) {
+                const parsedUrl = new URL(url)
+                navigate(parsedUrl.pathname + parsedUrl.search)
+              } else {
+                window.location.href = url
+              }
+            } else {
+              navigate(url)
+            }
             return
           }
-
-          // Rule violation (422)
-          if (status === 422) {
-            setSubmitResult({
-              status: "error",
-              errorEnvelope: {
-                code: errData?.error?.code || "booking_rule_violation",
-                message:
-                  errData?.error?.message ||
-                  "Yêu cầu đặt sân vi phạm quy tắc nghiệp vụ.",
-                requestId: errData?.error?.requestId || makeRequestId("req-rule"),
-                details: errData?.error?.details,
-              },
-            })
-            return
-          }
-
-          // Planned endpoint notice (404 Not Found before BE handoff)
-          if (status === 404) {
-            setSubmitResult({
-              status: "error",
-              errorEnvelope: {
-                code: "not_found",
-                message:
-                  "Endpoint POST /api/v1/bookings hiện đang ở trạng thái 'planned' (chờ Backend hoàn tất handoff). Để kiểm chứng flow ngay bây giờ, bạn có thể chọn chế độ 'Mô phỏng' bên dưới.",
-                requestId: errData?.error?.requestId || makeRequestId("req-404"),
-              },
-            })
-            return
-          }
-
-          // Unauthorized (401)
-          if (status === 401) {
-            setSubmitResult({
-              status: "error",
-              errorEnvelope: {
-                code: "unauthorized",
-                message: "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại để tiếp tục.",
-                requestId: errData?.error?.requestId || makeRequestId("req-auth"),
-              },
-            })
-            return
-          }
-
-          // Generic error envelope from backend
-          if (errData?.error) {
-            setSubmitResult({
-              status: "error",
-              errorEnvelope: errData.error,
-            })
-            return
-          }
+        } catch {
+          // If starting checkout fails, display result state with button
         }
-
-        // Network / Timeout error
-        setSubmitResult({
-          status: "error",
-          errorEnvelope: {
-            code: "internal_error",
-            message:
-              "Không thể kết nối đến máy chủ hoặc timeout mạng. Kết quả commit có thể chưa rõ, vui lòng kiểm tra danh sách Booking trước khi gửi lại.",
-            requestId: makeRequestId("req-net"),
-          },
-        })
       }
-      return
-    }
 
-    // B. Simulation Mode (Mock execution per OpenAPI & SRS contract)
-    setTimeout(() => {
       setIsSubmitting(false)
+      setSubmitResult({
+        status: "success",
+        booking: createdBooking,
+        bookingCode: createdBooking.bookingCode,
+        bookingId: createdBooking.id,
+      })
+    } catch (err: unknown) {
+      setIsSubmitting(false)
+      if (err instanceof AxiosError) {
+        const status = err.response?.status
+        const errData = err.response?.data as ApiErrorResponse | undefined
 
-      if (submissionMode === "success") {
-        const randomHex = Math.random().toString(36).substring(2, 6).toUpperCase()
-        const dateCode = reviewData.bookingDate.replace(/-/g, "")
-        const code = `BK-${dateCode}-${randomHex}`
-        const mockBooking: BookingItem = {
-          id: (typeof crypto !== "undefined" && crypto.randomUUID) ? crypto.randomUUID() : makeRequestId("bk"),
-          bookingCode: code,
-          customerId: "usr-current-user",
-          courtId: reviewData.courtId,
-          bookingDate: reviewData.bookingDate,
-          status: "CONFIRMED",
-          slots: reviewData.selectedSlots.map((s) => ({
-            timeSlotId: s.id,
-            startsAt: s.startsAt,
-            endsAt: s.endsAt,
-          })),
-          createdAt: new Date().toISOString(),
-          cancelledAt: null,
+        // 409 Conflict
+        if (status === 409) {
+          setSubmitResult({
+            status: "conflict",
+            errorEnvelope: {
+              code: errData?.error?.code || "slot_unavailable",
+              message:
+                errData?.error?.message ||
+                "Khung giờ bạn chọn đã bị người khác đặt trước hoặc không còn khả dụng.",
+              requestId: errData?.error?.requestId || "",
+              details: errData?.error?.details || [
+                {
+                  field: "timeSlotIds",
+                  message: "Xung đột lịch đặt: Khung giờ đã bị chiếm trong lúc giao dịch commit.",
+                },
+              ],
+            },
+          })
+          return
         }
-        saveMockBooking(mockBooking)
-        setSubmitResult({
-          status: "success",
-          booking: mockBooking,
-          bookingCode: code,
-          bookingId: mockBooking.id,
-        })
-      } else if (submissionMode === "error_conflict") {
-        // 7. Xử lý booking conflict bằng thông báo rõ ràng
-        setSubmitResult({
-          status: "conflict",
-          errorEnvelope: {
-            code: "slot_unavailable",
-            message:
-              "Một hoặc nhiều khung giờ đã bị người khác đặt trước khi bạn hoàn tất. Toàn bộ yêu cầu đặt sân đã được hủy (rollback) an toàn để không phát sinh booking dang dở.",
-            requestId: (typeof crypto !== "undefined" && crypto.randomUUID) ? crypto.randomUUID() : "req-conflict-409",
-            details: [
-              {
-                field: "timeSlotIds",
-                message: "Khung giờ không còn khả dụng tại thời điểm giao dịch commit.",
-              },
-            ],
-          },
-        })
-      } else if (submissionMode === "error_non_consecutive") {
-        setSubmitResult({
-          status: "error",
-          errorEnvelope: {
-            code: "booking_rule_violation",
-            message: "Các khung giờ đặt sân phải liên tiếp nhau trong cùng một ngày.",
-            requestId: "req-consecutive-422",
-            details: [
-              {
-                field: "timeSlotIds",
-                message: "Phát hiện khoảng trống thời gian giữa các slot.",
-              },
-            ],
-          },
-        })
-      } else if (submissionMode === "error_min_max") {
-        setSubmitResult({
-          status: "error",
-          errorEnvelope: {
-            code: "booking_rule_violation",
-            message: `Số slot phải từ ${minSlots} đến ${maxSlots} slot liên tiếp theo cấu hình của sân.`,
-            requestId: "req-minmax-422",
-            details: [
-              {
-                field: "timeSlotIds",
-                message: "Số lượng slot không nằm trong giới hạn cấu hình của sân.",
-              },
-            ],
-          },
-        })
-      } else if (submissionMode === "error_limit_reached") {
-        setSubmitResult({
-          status: "error",
-          errorEnvelope: {
-            code: "booking_rule_violation",
-            message: "Bạn đã đạt giới hạn tối đa 3 booking đang hoạt động (SRS BR-06).",
-            requestId: "req-limit-422",
-            details: [
-              {
-                field: "customerId",
-                message: "Tối đa 3 active bookings cho mỗi tài khoản.",
-              },
-            ],
-          },
-        })
-      } else if (submissionMode === "error_horizon_exceeded") {
-        setSubmitResult({
-          status: "error",
-          errorEnvelope: {
-            code: "booking_rule_violation",
-            message: "Ngày đặt sân vượt quá phạm vi 30 ngày cho phép (SRS C-01 / BR-05).",
-            requestId: "req-horizon-422",
-            details: [
-              {
-                field: "bookingDate",
-                message: "Ngày đặt tối đa 30 ngày lịch tính từ hiện tại.",
-              },
-            ],
-          },
-        })
-      } else {
-        // error_timeout
-        setSubmitResult({
-          status: "error",
-          errorEnvelope: {
-            code: "internal_error",
-            message: "Hệ thống tạm thời bận hoặc timeout mạng. Vui lòng kiểm tra danh sách Booking trước khi gửi lại.",
-            requestId: "req-timeout-500",
-          },
-        })
+
+        // Rule violation (422)
+        if (status === 422) {
+          setSubmitResult({
+            status: "error",
+            errorEnvelope: {
+              code: errData?.error?.code || "booking_rule_violation",
+              message:
+                errData?.error?.message ||
+                "Yêu cầu đặt sân vi phạm quy tắc nghiệp vụ.",
+              requestId: errData?.error?.requestId || "",
+              details: errData?.error?.details,
+            },
+          })
+          return
+        }
+
+        // Unauthorized (401)
+        if (status === 401) {
+          setSubmitResult({
+            status: "error",
+            errorEnvelope: {
+              code: "unauthorized",
+              message: "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại để tiếp tục.",
+              requestId: errData?.error?.requestId || "",
+            },
+          })
+          return
+        }
+
+        if (errData?.error) {
+          setSubmitResult({
+            status: "error",
+            errorEnvelope: errData.error,
+          })
+          return
+        }
       }
-    }, 600)
+
+      setSubmitResult({
+        status: "error",
+        errorEnvelope: {
+          code: "internal_error",
+          message:
+            "Không thể kết nối đến máy chủ hoặc timeout mạng. Vui lòng kiểm tra danh sách Booking trước khi gửi lại.",
+          requestId: "",
+        },
+      })
+    }
   }
 
   function handleBackToEdit() {
+    if (!reviewData) return
     navigate(`/courts/${reviewData.courtId}/availability?date=${reviewData.bookingDate}`)
-  }
-
-  function handleCopyPayload() {
-    navigator.clipboard.writeText(JSON.stringify(reviewData.payload, null, 2))
-    setCopiedPayload(true)
-    setTimeout(() => setCopiedPayload(false), 2000)
-  }
-
-  function handleCopyKey() {
-    navigator.clipboard.writeText(idempotencyKey)
-    setCopiedKey(true)
-    setTimeout(() => setCopiedKey(false), 2000)
-  }
-
-  function handleRefreshKey() {
-    setIdempotencyKey(generateIdempotencyKey())
   }
 
   return (
@@ -421,21 +296,13 @@ export function BookingReviewPage() {
             Kiểm tra thông tin sân, ngày và các khung giờ trước khi hoàn tất gửi yêu cầu
           </p>
         </div>
-
-        {/* Execution Mode Badge */}
-        <div className="flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3.5 py-1.5 text-xs font-semibold text-emerald-800">
-          <Info className="h-3.5 w-3.5 text-emerald-600" />
-          <span>Hỗ trợ API thật & Mô phỏng theo Contract</span>
-        </div>
       </div>
 
-      {/* Two columns layout matching Screenshot 5 & design system */}
+      {/* Two columns layout */}
       <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_380px]">
         {/* Left Column: Court & Slot Summary */}
         <div className="space-y-6">
-          {/* Main Booking Summary Card */}
           <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-            {/* 2. Hiển thị booking summary trước khi submit */}
             {/* Court Info Header */}
             <div className="flex items-start gap-3.5 pb-6 border-b border-gray-100">
               <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-lg font-black text-emerald-800">
@@ -461,7 +328,7 @@ export function BookingReviewPage() {
               </div>
             </div>
 
-            {/* 4 Details Grid */}
+            {/* Details Grid */}
             <div className="mt-6 grid grid-cols-2 gap-y-5 gap-x-4">
               <div>
                 <p className="text-xs text-gray-400 font-medium">Ngày đặt sân</p>
@@ -509,33 +376,74 @@ export function BookingReviewPage() {
               </div>
             </div>
 
-            {/* 3. Hiển thị giá tham chiếu và tổng số slot */}
+            {/* Real Payment Pricing or Reference Price */}
             <div className="mt-6 rounded-xl border border-gray-200 bg-gray-50/80 p-4">
-              <div className="flex items-center justify-between">
+              {courtPricing && courtPricing.pricePerSlotVnd > 0 ? (
                 <div>
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
-                    GIÁ THAM CHIẾU (REFERENCE PRICE)
-                  </p>
-                  <p className="text-xs text-gray-600 mt-0.5">
-                    Đơn giá: <span className="font-semibold text-gray-900">{priceInfo.unitText}</span> × {slotCount} slot
+                  <div className="flex items-center justify-between pb-3 border-b border-gray-200/70">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-gray-900">
+                      <CreditCard className="h-4 w-4 text-emerald-600" />
+                      <span>Chi phí đặt sân & Đặt cọc</span>
+                    </div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 bg-emerald-100 px-2.5 py-0.5 rounded-full border border-emerald-300">
+                      CỌC 30% ONLINE
+                    </span>
+                  </div>
+
+                  <div className="mt-3 space-y-2 text-xs">
+                    <div className="flex justify-between text-gray-600">
+                      <span>Đơn giá mỗi slot:</span>
+                      <span className="font-semibold text-gray-900">
+                        {pricePerSlot.toLocaleString("vi-VN")} VND / slot
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-gray-600">
+                      <span>Tổng tiền ({slotCount} slot):</span>
+                      <span className="font-bold text-gray-900">
+                        {totalCalculatedVnd.toLocaleString("vi-VN")} VND
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-emerald-900 font-bold border-t border-gray-200/60 pt-2">
+                      <span>Số tiền cọc trực tuyến (30%):</span>
+                      <span className="text-sm font-black text-emerald-700">
+                        {depositCalculatedVnd.toLocaleString("vi-VN")} VND
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-gray-500 text-[11px]">
+                      <span>Số tiền còn lại thanh toán tại sân:</span>
+                      <span>{remainingCalculatedVnd.toLocaleString("vi-VN")} VND</span>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                        GIÁ THAM CHIẾU (REFERENCE PRICE)
+                      </p>
+                      <p className="text-xs text-gray-600 mt-0.5">
+                        Đơn giá: <span className="font-semibold text-gray-900">{priceInfo.unitText}</span> × {slotCount} slot
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-xs text-gray-400 font-medium">Tổng giá tham chiếu:</span>
+                      <p className="text-lg font-black text-gray-900">
+                        {priceInfo.totalText}
+                      </p>
+                    </div>
+                  </div>
+                  <p className="mt-2 text-[11px] text-gray-400 leading-relaxed border-t border-gray-200/60 pt-2 flex items-center gap-1.5">
+                    <Tag className="h-3 w-3 text-emerald-600 shrink-0" />
+                    <span>
+                      Giá tham chiếu mang tính đối chiếu. Bạn có thể thanh toán khi đến sân.
+                    </span>
                   </p>
                 </div>
-                <div className="text-right">
-                  <span className="text-xs text-gray-400 font-medium">Tổng giá tham chiếu:</span>
-                  <p className="text-lg font-black text-gray-900">
-                    {priceInfo.totalText}
-                  </p>
-                </div>
-              </div>
-              <p className="mt-2 text-[11px] text-gray-400 leading-relaxed border-t border-gray-200/60 pt-2 flex items-center gap-1.5">
-                <Tag className="h-3 w-3 text-emerald-600 shrink-0" />
-                <span>
-                  Giá tham chiếu mang tính đối chiếu. MVP hiện tại không thu phí hoặc yêu cầu thanh toán trực tuyến.
-                </span>
-              </p>
+              )}
             </div>
 
-            {/* 4. Validate slot selection result banner */}
+            {/* Validation Banner */}
             <div className="mt-6">
               {validation.isValid ? (
                 <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4">
@@ -544,7 +452,7 @@ export function BookingReviewPage() {
                     Kiểm tra điều kiện đặt sân: Hợp lệ
                   </div>
                   <p className="mt-1 text-xs text-emerald-800 leading-relaxed">
-                    Các slot cùng sân, cùng ngày, liên tiếp và nằm trong giới hạn {minSlots}–{maxSlots} slot. Điều kiện sẽ được backend xác minh lại atomic khi submit.
+                    Các slot cùng sân, cùng ngày, liên tiếp và nằm trong giới hạn {minSlots}–{maxSlots} slot. Giao dịch sẽ được xác nhận an toàn tại máy chủ.
                   </p>
                 </div>
               ) : (
@@ -566,105 +474,24 @@ export function BookingReviewPage() {
                 </div>
               )}
             </div>
-
-            {/* Verified API Payload preview drawer */}
-            <div className="mt-6 pt-4 border-t border-gray-100">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
-                  Contract Payload (CreateBookingRequest)
-                </span>
-                <button
-                  type="button"
-                  onClick={handleCopyPayload}
-                  className="flex items-center gap-1 text-[11px] font-medium text-emerald-700 hover:text-emerald-800"
-                >
-                  <Copy className="h-3 w-3" />
-                  {copiedPayload ? "Đã sao chép!" : "Sao chép JSON"}
-                </button>
-              </div>
-              <pre className="overflow-x-auto rounded-xl bg-gray-900 p-3 text-[11px] text-gray-100 font-mono">
-                {JSON.stringify(reviewData.payload, null, 2)}
-              </pre>
-            </div>
           </div>
         </div>
 
-        {/* Right Column: Submission Controls & Outcomes */}
+        {/* Right Column: Submission Controls */}
         <div className="space-y-6">
           <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm h-fit">
             <h2 className="text-base font-black text-gray-900">
-              Xác nhận & Gửi yêu cầu
+              Xác nhận & Hoàn tất
             </h2>
             <p className="mt-1 text-xs text-gray-500 leading-relaxed">
-              Nút submit sẽ được vô hiệu hóa trong lúc gửi để chống double-click. Giao dịch được bảo vệ bằng Idempotency-Key.
+              Vui lòng kiểm tra kỹ thông tin trước khi nhấn xác nhận. Bạn có thể chủ động hủy lịch trước giờ mở sân nếu có thay đổi.
             </p>
 
-            {/* Idempotency Key Info & Refresh */}
-            <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50/70 p-3">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-bold text-gray-700 flex items-center gap-1.5">
-                  <KeyRound className="h-3.5 w-3.5 text-emerald-600" />
-                  Idempotency-Key
-                </span>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={handleCopyKey}
-                    title="Sao chép key"
-                    className="text-[10px] text-emerald-700 hover:text-emerald-800 font-semibold flex items-center gap-0.5"
-                  >
-                    <Copy className="h-2.5 w-2.5" />
-                    {copiedKey ? "Đã chép" : "Chép"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleRefreshKey}
-                    title="Đổi key mới"
-                    className="text-[10px] text-gray-500 hover:text-gray-800 font-semibold flex items-center gap-0.5"
-                  >
-                    <RefreshCw className="h-2.5 w-2.5" />
-                    Đổi
-                  </button>
-                </div>
-              </div>
-              <p className="mt-1 text-[11px] font-mono text-gray-500 truncate" title={idempotencyKey}>
-                {idempotencyKey}
-              </p>
-            </div>
-
-            {/* Execution / Simulation Selector */}
-            <div className="mt-5">
-              <label
-                htmlFor="submission-mode-select"
-                className="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1.5"
-              >
-                NGUỒN THỰC THI (API THẬT / MÔ PHỎNG CONTRACT)
-              </label>
-              <select
-                id="submission-mode-select"
-                value={submissionMode}
-                onChange={(e) => {
-                  setSubmissionMode(e.target.value as SubmissionMode)
-                  setSubmitResult({ status: "idle" })
-                }}
-                className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-xs font-semibold text-gray-800 shadow-sm transition-colors focus:border-emerald-600 focus:outline-none focus:ring-1 focus:ring-emerald-600"
-              >
-                <option value="real_api">🚀 Gọi API thật (POST /api/v1/bookings)</option>
-                <option value="success">✅ Mô phỏng: Đặt sân thành công (201)</option>
-                <option value="error_conflict">⚠️ Mô phỏng: Xung đột khung giờ / Conflict (409 slot_unavailable)</option>
-                <option value="error_non_consecutive">❌ Mô phỏng: Slot không liên tiếp (422)</option>
-                <option value="error_min_max">❌ Mô phỏng: Vượt quá min/max slot (422)</option>
-                <option value="error_limit_reached">❌ Mô phỏng: Quá 3 active booking (422)</option>
-                <option value="error_horizon_exceeded">❌ Mô phỏng: Quá 30 ngày horizon (422)</option>
-                <option value="error_timeout">📡 Mô phỏng: Lỗi mạng / Timeout (500)</option>
-              </select>
-            </div>
-
-            {/* 6. Disable submit trong lúc request để tránh double submit */}
+            {/* Submit button */}
             <button
               id="review-confirm-button"
               type="button"
-              disabled={isSubmitting || !validation.isValid}
+              disabled={isSubmitting || !validation.isValid || submitResult.status === "success"}
               onClick={handleConfirmBooking}
               className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-[#B4FF00] px-5 py-3.5 text-sm font-black text-gray-900 transition-all hover:bg-[#AAEF00] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 shadow-sm"
             >
@@ -672,6 +499,11 @@ export function BookingReviewPage() {
                 <>
                   <Loader2 className="h-4 w-4 animate-spin text-gray-900" />
                   Đang xử lý đặt sân…
+                </>
+              ) : submitResult.status === "success" ? (
+                <>
+                  <CheckCircle className="h-4 w-4 text-emerald-800" />
+                  Đã đặt sân thành công
                 </>
               ) : (
                 <>
@@ -691,7 +523,7 @@ export function BookingReviewPage() {
               Quay lại chỉnh sửa
             </button>
 
-            {/* 8. Hiển thị success state và booking code/id */}
+            {/* Success state */}
             {submitResult.status === "success" && (
               <div
                 role="alert"
@@ -699,58 +531,82 @@ export function BookingReviewPage() {
               >
                 <div className="flex items-center gap-2 font-black text-sm text-emerald-900">
                   <CheckCircle className="h-5 w-5 text-emerald-600 shrink-0" />
-                  Đặt sân thành công!
+                  {submitResult.booking?.status === "PENDING_PAYMENT"
+                    ? "Đã tạo đơn đặt sân — Chờ đặt cọc"
+                    : "Đặt sân thành công!"}
                 </div>
                 <div className="mt-3 space-y-1.5 rounded-xl bg-white/80 p-3 border border-emerald-100">
                   <div className="flex items-center justify-between">
                     <span className="text-gray-500 font-medium">Mã booking:</span>
-                    <div className="flex items-center gap-1 font-mono font-black text-sm text-emerald-800">
-                      <span>{submitResult.bookingCode}</span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (submitResult.bookingCode) {
-                            navigator.clipboard.writeText(submitResult.bookingCode)
-                            setCopiedSuccessCode(true)
-                            setTimeout(() => setCopiedSuccessCode(false), 2000)
-                          }
-                        }}
-                        className="p-0.5 text-emerald-600 hover:text-emerald-800"
-                      >
-                        <Copy className="h-3 w-3" />
-                      </button>
-                      {copiedSuccessCode && <span className="text-[10px] text-emerald-600">✓</span>}
-                    </div>
+                    <span className="font-mono font-black text-sm text-emerald-800">
+                      {submitResult.bookingCode}
+                    </span>
                   </div>
-                  {submitResult.bookingId && (
-                    <div className="flex items-center justify-between text-[11px]">
-                      <span className="text-gray-500">ID Booking:</span>
-                      <span className="font-mono text-gray-700 truncate max-w-[150px]" title={submitResult.bookingId}>
-                        {submitResult.bookingId}
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="text-gray-500">Trạng thái:</span>
+                    <span className={`font-bold ${submitResult.booking?.status === "PENDING_PAYMENT" ? "text-amber-700" : "text-emerald-700"}`}>
+                      {submitResult.booking?.status || "CONFIRMED"}
+                    </span>
+                  </div>
+                  {submitResult.booking?.status === "PENDING_PAYMENT" && depositCalculatedVnd > 0 && (
+                    <div className="flex items-center justify-between text-[11px] border-t border-emerald-100/60 pt-1.5">
+                      <span className="text-gray-500">Tiền cọc cần thanh toán (30%):</span>
+                      <span className="font-bold text-emerald-800">
+                        {depositCalculatedVnd.toLocaleString("vi-VN")} VND
                       </span>
                     </div>
                   )}
-                  <div className="flex items-center justify-between text-[11px]">
-                    <span className="text-gray-500">Trạng thái:</span>
-                    <span className="font-bold text-emerald-700">CONFIRMED</span>
-                  </div>
                 </div>
 
-                {/* 9. Điều hướng sang Booking Detail hoặc My Booking */}
+                {submitResult.booking?.status === "CONFIRMED" ? (
+                  <div className="mt-3 rounded-xl border border-emerald-200 bg-white/80 p-2.5 text-[11px] text-emerald-900 flex items-start gap-2">
+                    <MailCheck className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <span>
+                      Email xác nhận đã được gửi đến hộp thư của bạn. Hệ thống sẽ tiếp tục gửi email nhắc lịch trước giờ thi đấu 24 tiếng.
+                    </span>
+                  </div>
+                ) : (
+                  <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50/80 p-2.5 text-[11px] text-amber-900 flex items-start gap-2">
+                    <Clock className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                    <span>
+                      Vui lòng tiến hành thanh toán cọc trực tuyến để giữ chỗ chính thức.
+                    </span>
+                  </div>
+                )}
+
                 <div className="mt-4 space-y-2">
+                  {submitResult.booking?.status === "PENDING_PAYMENT" && submitResult.bookingId && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          const res = await paymentsApi.startPayment(submitResult.bookingId!)
+                          if (res.data.checkoutUrl) {
+                            window.location.href = res.data.checkoutUrl
+                          }
+                        } catch {
+                          navigate(`/bookings/${submitResult.bookingId}`)
+                        }
+                      }}
+                      className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-[#16A34A] px-4 py-2.5 text-xs font-black text-white hover:bg-[#15803D] transition-colors shadow-xs"
+                    >
+                      <CreditCard className="h-4 w-4" />
+                      Tiến hành thanh toán cọc ngay →
+                    </button>
+                  )}
                   {submitResult.bookingId && (
                     <button
                       type="button"
                       onClick={() => navigate(`/bookings/${submitResult.bookingId}`)}
-                      className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-emerald-700 px-4 py-2.5 text-xs font-bold text-white hover:bg-emerald-800 transition-colors"
+                      className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-gray-900 px-4 py-2.5 text-xs font-bold text-white hover:bg-gray-800 transition-colors"
                     >
-                      Xem chi tiết Booking này →
+                      Xem chi tiết Booking này
                     </button>
                   )}
                   <button
                     type="button"
                     onClick={() => navigate("/bookings")}
-                    className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-emerald-300 bg-white px-4 py-2 text-xs font-bold text-emerald-800 hover:bg-emerald-50 transition-colors"
+                    className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-gray-200 bg-white px-4 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50 transition-colors"
                   >
                     Về danh sách Booking của tôi
                   </button>
@@ -758,7 +614,7 @@ export function BookingReviewPage() {
               </div>
             )}
 
-            {/* 7. Xử lý booking conflict bằng thông báo rõ ràng */}
+            {/* Conflict Error (409) */}
             {submitResult.status === "conflict" && submitResult.errorEnvelope && (
               <div
                 role="alert"
@@ -771,15 +627,6 @@ export function BookingReviewPage() {
                 <p className="mt-1.5 text-xs text-rose-800 leading-relaxed font-medium">
                   {submitResult.errorEnvelope.message}
                 </p>
-                <div className="mt-2.5 rounded-xl bg-white/80 p-2.5 font-mono text-[10px] text-rose-800 space-y-0.5 border border-rose-200">
-                  <p>Mã lỗi: <span className="font-bold">{submitResult.errorEnvelope.code}</span></p>
-                  <p>Request ID: {submitResult.errorEnvelope.requestId}</p>
-                  {submitResult.errorEnvelope.details?.map((d, i) => (
-                    <p key={i} className="text-rose-600 font-sans">
-                      Chi tiết: [{d.field}] {d.message}
-                    </p>
-                  ))}
-                </div>
 
                 <div className="mt-3.5 flex flex-col gap-2 pt-2 border-t border-rose-200/80">
                   <button
@@ -787,14 +634,11 @@ export function BookingReviewPage() {
                     onClick={handleBackToEdit}
                     className="flex items-center justify-center gap-1.5 rounded-xl bg-rose-700 px-4 py-2.5 text-xs font-bold text-white hover:bg-rose-800 transition-colors"
                   >
-                    <RefreshCw className="h-3.5 w-3.5" />
                     Tải lại lịch sân & Chọn giờ khác
                   </button>
                   <button
                     type="button"
-                    onClick={() => {
-                      setSubmitResult({ status: "idle" })
-                    }}
+                    onClick={() => setSubmitResult({ status: "idle" })}
                     className="text-center text-[11px] font-semibold text-rose-700 hover:underline"
                   >
                     Đóng thông báo
@@ -816,15 +660,6 @@ export function BookingReviewPage() {
                 <p className="mt-1.5 text-xs text-amber-800 leading-relaxed font-medium">
                   {submitResult.errorEnvelope.message}
                 </p>
-                <div className="mt-2.5 rounded-xl bg-white/80 p-2.5 font-mono text-[10px] text-amber-800 space-y-0.5 border border-amber-200">
-                  <p>Mã lỗi: {submitResult.errorEnvelope.code}</p>
-                  <p>Request ID: {submitResult.errorEnvelope.requestId}</p>
-                  {submitResult.errorEnvelope.details?.map((d, i) => (
-                    <p key={i} className="text-amber-700 font-sans">
-                      Chi tiết: [{d.field}] {d.message}
-                    </p>
-                  ))}
-                </div>
                 <div className="mt-3 pt-2 border-t border-amber-200 flex items-center justify-between">
                   <button
                     type="button"

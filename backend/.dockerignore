@@ -1,3 +1,7 @@
-.env
+# Không đưa bất kỳ file env nào vào Docker build context.
+# `.env` một mình không đủ: pattern của Docker khớp đúng tên file, nên
+# `.env.staging` (chứa connection string Neon thật) vẫn lọt vào `COPY . .`
+# và bị gửi lên build server của Render.
+.env*
 *.test
 tmp

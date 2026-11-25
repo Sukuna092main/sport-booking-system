@@ -1,0 +1,35 @@
+$kind: http-request
+name: Schedule / PUT operating-hours cả tuần
+url: "{{baseUrl}}/admin/courts/{{courtId}}/operating-hours"
+method: PUT
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "hours": [
+        { "weekday": 1, "opensAt": "08:00:00", "closesAt": "22:00:00" },
+        { "weekday": 2, "opensAt": "08:00:00", "closesAt": "22:00:00" },
+        { "weekday": 3, "opensAt": "08:00:00", "closesAt": "22:00:00" },
+        { "weekday": 4, "opensAt": "08:00:00", "closesAt": "22:00:00" },
+        { "weekday": 5, "opensAt": "08:00:00", "closesAt": "22:00:00" },
+        { "weekday": 6, "opensAt": "08:00:00", "closesAt": "22:00:00" },
+        { "weekday": 7, "opensAt": "08:00:00", "closesAt": "22:00:00" }
+      ]
+    }
+auth:
+  type: bearer
+  credentials:
+    token: "{{adminToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('PUT lich 200', () => pm.response.to.have.status(200));
+      const b = pm.response.json();
+      pm.test('Sinh duoc mau slot', () => {
+        pm.expect(b.data).to.have.property('timeSlots');
+        pm.expect(b.data.timeSlots.length).to.be.greaterThan(0);
+      });
+    language: text/javascript
+order: 1000

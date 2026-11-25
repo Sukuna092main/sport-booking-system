@@ -13,7 +13,7 @@ import (
 	"github.com/Sukuna092main/sport-booking-system/backend/internal/platform/response"
 )
 
-func Authenticate(users user.Repository, tokens *Tokens) gin.HandlerFunc {
+func Authenticate(users user.Repository, tokens *Tokens, sessions ...*SQLSessionStore) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		headers := c.Request.Header.Values("Authorization")
 		parts := strings.Fields(c.GetHeader("Authorization"))
@@ -39,9 +39,28 @@ func Authenticate(users user.Repository, tokens *Tokens) gin.HandlerFunc {
 			response.Error(c, http.StatusForbidden, "account_inactive", "Tài khoản không hoạt động.")
 			return
 		}
+		version := u.AuthVersion
+		if version < 1 {
+			version = 1
+		}
+		if claims.AuthVersion != version {
+			unauthorized(c)
+			return
+		}
 		if u.Role != "USER" && u.Role != "ADMIN" {
 			response.Error(c, http.StatusForbidden, "forbidden", "Không đủ quyền truy cập.")
 			return
+		}
+		if len(sessions) > 0 && claims.SessionFamily != "" {
+			active, err := sessions[0].Active(c.Request.Context(), u.ID, claims.SessionFamily)
+			if err != nil {
+				apperror.Write(c, err)
+				return
+			}
+			if !active {
+				unauthorized(c)
+				return
+			}
 		}
 		// DB is authoritative: stale JWT role cannot retain revoked privileges.
 		identity.Set(c, identity.Actor{ID: u.ID, Role: u.Role})
